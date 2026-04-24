@@ -1,6 +1,7 @@
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 
 # -- HELPER FUNCTIONS --
 def haversine(lat1, lon1, lat2, lon2):
@@ -29,12 +30,18 @@ def angle_wrap(a):
     return (a + 180) % 360 - 180
 # ---------------------------
 
+FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "jerk", "log_dist", "dcog", "log_dt"]
+
 df = pd.read_csv(
     "ais_with_ers_labels_01.csv",
     usecols=["mmsi", "trajectory_id", "date_time_utc", "lon", "lat", "cog", "label"],
     low_memory=False
 )
 df = df.fillna(value={"label": "no_fishing"})
+
+first_50_mmsis = df["mmsi"].drop_duplicates().head(10)
+
+df = df[df["mmsi"].isin(first_50_mmsis)]
 
 # print("Nr of AIS messages: ", len(df))
 # counts = df["label"].value_counts().reset_index()
@@ -112,10 +119,41 @@ def add_features(df):
         "prev_speed_calc_ms", "prev_accel"
     ])
 
+    # Smooth noisy derivative features
+    SMOOTH_COLS = ["accel", "jerk", "dcog"]
+    WINDOW = 5
+    for col in SMOOTH_COLS:
+        df[f"ra_{col}"] = (
+            df.groupby("trajectory_id")[col]
+              .transform(lambda x: x.rolling(window=WINDOW, center=True, min_periods=1).mean())
+        )
+
     return df
 
 df = add_features(df)
 
-df.to_csv("ais_labeled_features.csv", index=False)
+#df.to_csv("ais_labeled_features.csv", index=False)
+
+for traj_id, d in df.groupby("trajectory_id"):
+    d = d.sort_values("date_time_utc")
+    t = d["date_time_utc"]
+
+    fig, axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+    fig.suptitle(f"Trajectory {traj_id}", fontsize=13)
+
+    for ax, col in zip(axes, ["accel", "jerk", "dcog"]):
+
+        ax.plot(t, d[col], alpha=0.3, linewidth=1, label="raw")
+        ax.plot(t, d[f"ra_{col}"], linewidth=1, label=f"MA({5})")
+        ax.set_ylabel(col)
+        ax.legend(loc="upper right", fontsize=8)
+        ax.grid(True, linewidth=0.4)
+
+print(df[FEATURES].isna().sum())
+print(np.isinf(df[FEATURES]).sum())
+print(df["y"].value_counts(dropna=False))
+
+print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
+print(df[FEATURES].abs().max().sort_values(ascending=False))
 
 print(df.head())
