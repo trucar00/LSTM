@@ -6,14 +6,14 @@ from torch.utils.data import TensorDataset, DataLoader
 from tqdm import tqdm
 import os
 
-WINDOW = 128
-STRIDE = 64
+WINDOW = 256
+STRIDE = 128
 
 
 if os.path.exists("fishing_bilstm_best.pt"):
     os.remove("fishing_bilstm_best.pt")
 
-FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "jerk", "log_dist", "dcog", "log_dt"]
+FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
 df = pd.read_csv("first_50_feats.csv")
 
@@ -41,9 +41,9 @@ print(df["y"].value_counts(dropna=False))
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))
 
-df["accel"] = df["accel"].clip(-5, 5)
-df["jerk"]  = df["jerk"].clip(-5, 5)
-df["dcog"]  = df["dcog"].clip(-10, 10)
+df["ra_accel"] = df["accel"].clip(-5, 5)
+df["ra_jerk"]  = df["jerk"].clip(-5, 5)
+df["ra_dcog"]  = df["dcog"].clip(-5, 5)
 
 def make_windows(traj_df, FEATURES, window=WINDOW, stride=STRIDE):
     """Yield (X, y, mask) tuples from one trajectory."""
@@ -124,16 +124,11 @@ test_loader = DataLoader(test_ds, batch_size=BATCH, shuffle=False,
                          num_workers=0, pin_memory=False)
 
 
-# 4. Device, model, loss, optimizer
-# device = torch.device(
-#     "cuda" if torch.cuda.is_available()
-#     else "mps" if torch.backends.mps.is_available()
-#     else "cpu"
-# )
-
 if torch.cuda.is_available():
+    print("Cuda available.")
     device = torch.device("cuda")
 else:
+    print("Cuda NOT available. Using CPU.")
     device = torch.device("cpu")
 
 # ------------------------------------------------------------------
@@ -206,7 +201,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 best_val = float("inf")
-for epoch in range(1, 21):
+for epoch in range(1, 3):
     tr = run_epoch(train_loader, train=True)
     vl = run_epoch(val_loader,   train=False)
     scheduler.step(vl[0])

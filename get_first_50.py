@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "jerk", "log_dist", "dcog", "log_dt"]
+FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk","log_dist", "ra_dcog", "log_dt"]
 
 df = pd.read_csv("ais_labeled_features.csv")
 
@@ -17,4 +17,4 @@ print(df_50.head())
 label_counts = df_50["y"].value_counts(dropna=False)
 print(label_counts)
 
-#df_50.to_csv("first_50_feats.csv", index=False)
+df_50.to_csv("first_50_feats.csv", index=False)

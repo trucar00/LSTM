@@ -30,32 +30,19 @@ def angle_wrap(a):
     return (a + 180) % 360 - 180
 # ---------------------------
 
-FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "jerk", "log_dist", "dcog", "log_dt"]
+FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
 
 df = pd.read_csv(
     "ais_with_ers_labels_01.csv",
-    usecols=["mmsi", "trajectory_id", "date_time_utc", "lon", "lat", "cog", "label"],
+    usecols=["mmsi", "trajectory_id", "date_time_utc", "lon", "lat", "speed", "cog", "label"],
     low_memory=False
 )
 df = df.fillna(value={"label": "no_fishing"})
-
-first_50_mmsis = df["mmsi"].drop_duplicates().head(10)
-
-df = df[df["mmsi"].isin(first_50_mmsis)]
-
-# print("Nr of AIS messages: ", len(df))
-# counts = df["label"].value_counts().reset_index()
-# counts.columns = ["gear", "nr_messages"]
-# print(counts)
 
 # Include all fishing as FISHING
 gears = ["Trål", "Snurrevad", "Garn", "Not", "Krokredskap"]
 for gear in gears:
     df.loc[df["label"] == gear, "label"] = "fishing"
-
-counts = df["label"].value_counts().reset_index()
-counts.columns = ["gear", "nr_messages"]
-print(counts)
 
 # Build features
 
@@ -130,11 +117,39 @@ def add_features(df):
 
     return df
 
+def remove_trajectories_w_low_avg_speed(df):
+    KNOT_TO_MS = 0.514444
+    MIN_AVG_SPEED_KNOTS = 1
+    MIN_AVG_SPEED_MS = MIN_AVG_SPEED_KNOTS * KNOT_TO_MS
+
+    avg_speed = df.groupby("trajectory_id")["speed"].mean()
+
+    stationary_traj_ids = avg_speed[avg_speed < MIN_AVG_SPEED_MS].index
+
+    df = df[~df["trajectory_id"].isin(stationary_traj_ids)].copy()
+
+    print(f"Removed {len(stationary_traj_ids)} trajectories with avg speed < {MIN_AVG_SPEED_KNOTS} knots")
+    print(f"Remaining trajectories: {df['trajectory_id'].nunique()}")
+    
+    return df
+
+df = remove_trajectories_w_low_avg_speed(df)
 df = add_features(df)
 
-#df.to_csv("ais_labeled_features.csv", index=False)
+counts = df["label"].value_counts().reset_index()
+counts.columns = ["gear", "nr_messages"]
+print(counts)
 
-for traj_id, d in df.groupby("trajectory_id"):
+print(df[FEATURES].isna().sum())
+print(np.isinf(df[FEATURES]).sum())
+print(df["y"].value_counts(dropna=False))
+
+print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
+print(df[FEATURES].abs().max().sort_values(ascending=False))
+
+df.to_csv("ais_labeled_features.csv", index=False)
+
+""" for traj_id, d in df.groupby("trajectory_id"):
     d = d.sort_values("date_time_utc")
     t = d["date_time_utc"]
 
@@ -148,12 +163,7 @@ for traj_id, d in df.groupby("trajectory_id"):
         ax.set_ylabel(col)
         ax.legend(loc="upper right", fontsize=8)
         ax.grid(True, linewidth=0.4)
+    
+    plt.show() """
 
-print(df[FEATURES].isna().sum())
-print(np.isinf(df[FEATURES]).sum())
-print(df["y"].value_counts(dropna=False))
 
-print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
-print(df[FEATURES].abs().max().sort_values(ascending=False))
-
-print(df.head())
