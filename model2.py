@@ -16,7 +16,7 @@ if os.path.exists("fishing_bilstm_best.pt"):
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
 #df = pd.read_csv("first_50_feats.csv")
-df = pd.read_parquet("first_50_feats_conf_labels.parquet")
+df = pd.read_parquet("ais_conf_labeled_features.parquet")
 
 # Split into train test and validation set by mmsi so that no vessel appear in both.
 rng = np.random.default_rng(42)
@@ -27,20 +27,28 @@ train_mmsi = set(mmsis[: int(0.70 * n)])
 val_mmsi   = set(mmsis[int(0.70 * n) : int(0.85 * n)])
 test_mmsi  = set(mmsis[int(0.85 * n) :])
 print(f"Train {len(train_mmsi)} | Val {len(val_mmsi)} | Test {len(test_mmsi)}")
+print("All sample weights:")
+print(df["sample_weight"].value_counts())
+
+print("Labeled y distribution:")
+print(df[df["sample_weight"] == 1]["y_train"].value_counts())
+
 
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))
 
 # Fit normalization on TRAIN ONLY
 train_df = df[df["mmsi"].isin(train_mmsi)]
+print(train_df.groupby(["report", "sample_weight", "y_train"]).size())
+
 mu    = train_df[FEATURES].mean()
 sigma = train_df[FEATURES].std().replace(0, 1)
 for col in FEATURES:
     df[col] = (df[col] - mu[col]) / sigma[col]
 
-print(df[FEATURES].isna().sum())
-print(np.isinf(df[FEATURES]).sum())
-print(df["y"].value_counts(dropna=False))
+#print(df[FEATURES].isna().sum())
+#print(np.isinf(df[FEATURES]).sum())
+print(df["y_train"].value_counts(dropna=False))
 
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))
@@ -50,26 +58,30 @@ df["ra_jerk"]  = df["ra_jerk"].clip(-5, 5)
 df["ra_dcog"]  = df["ra_dcog"].clip(-5, 5)
 
 def make_windows(traj_df, FEATURES, window=WINDOW, stride=STRIDE):
-    """Yield (X, y, mask) tuples from one trajectory."""
     X_all = traj_df[FEATURES].to_numpy(dtype=np.float32)
-    y_all = traj_df["y"].to_numpy(dtype=np.int8)
+    y_all = traj_df["y_train"].to_numpy(dtype=np.float32)
+    w_all = traj_df["sample_weight"].to_numpy(dtype=np.float32)
+
     n = len(traj_df)
-    if n < 8:   # too short to be useful
+    if n < 8:
         return
+
     for start in range(0, max(1, n - window + 1), stride):
         end = start + window
+
         x = X_all[start:end]
         y = y_all[start:end]
+        w = w_all[start:end]
+
         L = len(x)
-        if L < window:  # pad the tail
+
+        if L < window:
             pad = window - L
             x = np.vstack([x, np.zeros((pad, x.shape[1]), dtype=np.float32)])
-            y = np.concatenate([y, np.zeros(pad, dtype=np.int8)])
-            mask = np.concatenate([np.ones(L, dtype=np.bool_),
-                                   np.zeros(pad, dtype=np.bool_)])
-        else:
-            mask = np.ones(window, dtype=np.bool_)
-        yield x, y, mask
+            y = np.concatenate([y, np.zeros(pad, dtype=np.float32)])
+            w = np.concatenate([w, np.zeros(pad, dtype=np.float32)])
+
+        yield x, y, w
 
 class FishingBiLSTM(nn.Module):
     def __init__(self, n_features, hidden=128, n_layers=2, dropout=0.3):
@@ -106,10 +118,10 @@ def build_split(df, mmsi_set, FEATURES):
             Xs.append(x); Ys.append(y); Ms.append(m)
     if not Xs:
         return None
-    X = torch.from_numpy(np.stack(Xs))             # (N, T, F) float32
-    Y = torch.from_numpy(np.stack(Ys)).float()     # (N, T)
-    M = torch.from_numpy(np.stack(Ms))             # (N, T) bool
-    return TensorDataset(X, Y, M)
+    X = torch.from_numpy(np.stack(Xs))
+    Y = torch.from_numpy(np.stack(Ys)).float()
+    W = torch.from_numpy(np.stack(Ms)).float()
+    return TensorDataset(X, Y, W)
 
 train_ds = build_split(df, train_mmsi, FEATURES)
 val_ds   = build_split(df, val_mmsi,   FEATURES)
@@ -144,7 +156,13 @@ torch.manual_seed(42)
 model = FishingBiLSTM(n_features=len(FEATURES),
                       hidden=128, n_layers=2, dropout=0.3).to(device)
 
-pos_weight = torch.tensor([16_443_814 / 6_107_465], device=device)
+train_labeled = train_df[train_df["sample_weight"] == 1]
+neg = (train_labeled["y_train"] == 0).sum()
+pos = (train_labeled["y_train"] == 1).sum()
+
+pos_weight = torch.tensor([neg / pos], device=device, dtype=torch.float32)
+print("pos_weight:", pos_weight.item())
+
 bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
 
 def masked_loss(logits, y, mask):
@@ -205,7 +223,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 best_val = float("inf")
-for epoch in range(1, 5):
+for epoch in range(1, 20):
     tr = run_epoch(train_loader, train=True)
     vl = run_epoch(val_loader,   train=False)
     scheduler.step(vl[0])
@@ -213,13 +231,13 @@ for epoch in range(1, 5):
           f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f} acc {vl[4]:.3f}")
     if vl[0] < best_val:
         best_val = vl[0]
-        torch.save(model.state_dict(), "fishing_bilstm_best.pt")
+        torch.save(model.state_dict(), "fishing_bilstm_best_IDUN.pt")
 
 # ------------------------------------------------------------------
 # Final test
 # ------------------------------------------------------------------
 import os
-if os.path.exists("fishing_bilstm_best.pt"):
-    model.load_state_dict(torch.load("fishing_bilstm_best.pt"))
+if os.path.exists("fishing_bilstm_best_IDUN.pt"):
+    model.load_state_dict(torch.load("fishing_bilstm_best_IDUN.pt"))
 te = run_epoch(test_loader, train=False)
 print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")

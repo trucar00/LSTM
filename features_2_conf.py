@@ -32,18 +32,17 @@ def angle_wrap(a):
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
 
-df = pd.read_csv(
-    "ais_with_ers_labels_01.csv",
-    usecols=["mmsi", "trajectory_id", "date_time_utc", "lon", "lat", "speed", "cog", "label"],
-    low_memory=False
-)
+df = pd.read_parquet("Data/ais_conf_negs_w_reports.parquet")
 
-df = df.fillna(value={"label": "no_fishing"})
+counts = df["report"].value_counts()
+print(counts)
 
 # Include all fishing as FISHING
-gears = ["Trål", "Snurrevad", "Garn", "Not", "Krokredskap"]
+gears = ["Trål", "Not", "Krokredskap"]
 for gear in gears:
-    df.loc[df["label"] == gear, "label"] = "fishing"
+    df.loc[df["report"] == gear, "report"] = "fishing"
+
+print(df["report"].unique())
 
 # Build features
 
@@ -80,7 +79,13 @@ def add_features(df):
     df["cog_cos"] = np.cos(np.radians(df["cog"]))
 
     # Binary label
-    df["y"] = (df["label"] == "fishing").astype(np.int8)
+    df["y"] = np.nan
+    df.loc[df["report"] == "fishing", "y"] = 1
+    df.loc[df["report"] == "conf_no_fishing", "y"] = 0
+    
+    # Sample weight, unknown = 0
+    df["sample_weight"] = df["y"].notna().astype(np.float32)
+    df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
 
     # Calculated speed in m/s
     df["speed_calc_ms"] = df["dist_to_prev"] / df["dt"]
@@ -118,25 +123,10 @@ def add_features(df):
 
     return df
 
-def remove_trajectories_w_low_avg_speed(df):
-    MIN_AVG_SPEED_KNOTS = 1
-
-    avg_speed = df.groupby("trajectory_id")["speed"].mean()
-
-    stationary_traj_ids = avg_speed[avg_speed < MIN_AVG_SPEED_KNOTS].index
-
-    df = df[~df["trajectory_id"].isin(stationary_traj_ids)].copy()
-
-    print(f"Removed {len(stationary_traj_ids)} trajectories with avg speed < {MIN_AVG_SPEED_KNOTS} knots")
-    print(f"Remaining trajectories: {df['trajectory_id'].nunique()}")
-    
-    return df
-
-df = remove_trajectories_w_low_avg_speed(df)
 df = add_features(df)
 
-counts = df["label"].value_counts().reset_index()
-counts.columns = ["gear", "nr_messages"]
+counts = df["report"].value_counts().reset_index()
+counts.columns = ["report", "nr_messages"]
 print(counts)
 
 print(df[FEATURES].isna().sum())
@@ -146,23 +136,6 @@ print(df["y"].value_counts(dropna=False))
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))
 
-df.to_csv("ais_labeled_features.csv", index=False)
-
-""" for traj_id, d in df.groupby("trajectory_id"):
-    d = d.sort_values("date_time_utc")
-    t = d["date_time_utc"]
-
-    fig, axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
-    fig.suptitle(f"Trajectory {traj_id}", fontsize=13)
-
-    for ax, col in zip(axes, ["accel", "jerk", "dcog"]):
-
-        ax.plot(t, d[col], alpha=0.3, linewidth=1, label="raw")
-        ax.plot(t, d[f"ra_{col}"], linewidth=1, label=f"MA({5})")
-        ax.set_ylabel(col)
-        ax.legend(loc="upper right", fontsize=8)
-        ax.grid(True, linewidth=0.4)
-    
-    plt.show() """
+df.to_parquet("ais_conf_labeled_features.parquet", index=False)
 
 

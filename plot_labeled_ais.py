@@ -15,14 +15,14 @@ print(GEAR_COLOR["Trål"])
 
 df = pd.read_csv(
     "ais_with_ers_labels_01.csv",
-    usecols=["mmsi", "date_time_utc", "lon", "lat", "label"],
+    usecols=["mmsi", "trajectory_id", "date_time_utc", "lon", "lat", "label"],
     low_memory=False
 )
 df = df.fillna(value={"label": "no_fishing"})
 print(df["label"].unique())
 print(df.head())
 
-for mmsi, d in df.groupby("mmsi"):
+for mmsi, d in df.groupby("trajectory_id"):
     fig, ax = plt.subplots(figsize=(6, 4))
 
     d = d.copy()
@@ -47,5 +47,6 @@ for mmsi, d in df.groupby("mmsi"):
     ]
 
     ax.legend(handles=legend_elements, title="Gear")
+    plt.title(f"{mmsi}")
 
     plt.show()
