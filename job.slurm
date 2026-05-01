@@ -20,5 +20,10 @@ module load Python/3.11.5-GCCcore-13.2.0
 # Activate venv
 source ~/venv/myenv/bin/activate
 
+echo "Running on node: $(hostname)"
+echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+
+nvidia-smi
+
 # Run your script
 python model2.py
