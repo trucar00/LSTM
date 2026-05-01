@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=share-ie-itk
 #SBATCH --partition=GPUQ
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:1
 #SBATCH --time=0:5:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=16     # 2 CPU cores
@@ -18,7 +18,7 @@ module purge
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate venv
-source ~/venv/myenv/bin/activate
+source ~/venv/py311/bin/activate # VENV FOR GPU
 
 echo "Running on node: $(hostname)"
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
