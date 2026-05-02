@@ -32,13 +32,13 @@ def angle_wrap(a):
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
 
-df = pd.read_parquet("Data/ais_conf_negs_w_reports.parquet")
+df = pd.read_parquet("Data/all_gear_conf_01_04.parquet")
 
 counts = df["report"].value_counts()
 print(counts)
 
 # Include all fishing as FISHING
-gears = ["Trål", "Not", "Krokredskap"]
+gears = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn"]
 for gear in gears:
     df.loc[df["report"] == gear, "report"] = "fishing"
 
@@ -136,6 +136,6 @@ print(df["y"].value_counts(dropna=False))
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))
 
-df.to_parquet("ais_conf_labeled_features.parquet", index=False)
+df.to_parquet("ais_conf_labeled_features_01_04_all_gear.parquet", index=False)
 
 

@@ -16,7 +16,7 @@ if os.path.exists("fishing_bilstm_best.pt"):
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
 #df = pd.read_csv("first_50_feats.csv")
-df = pd.read_parquet("ais_conf_labeled_features.parquet")
+df = pd.read_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
 
 # Split into train test and validation set by mmsi so that no vessel appear in both.
 rng = np.random.default_rng(42)
@@ -223,7 +223,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 best_val = float("inf")
-for epoch in range(1, 20):
+for epoch in range(1, 5):
     tr = run_epoch(train_loader, train=True)
     vl = run_epoch(val_loader,   train=False)
     scheduler.step(vl[0])
@@ -231,7 +231,7 @@ for epoch in range(1, 20):
           f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f} acc {vl[4]:.3f}")
     if vl[0] < best_val:
         best_val = vl[0]
-        torch.save(model.state_dict(), "fishing_bilstm_best_IDUN.pt")
+        torch.save(model.state_dict(), "bilstm_best_IDUN_all_gear_01_04.pt")
 
 # ------------------------------------------------------------------
 # Final test
