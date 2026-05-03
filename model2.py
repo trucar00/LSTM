@@ -10,13 +10,13 @@ import glob
 WINDOW = 256
 STRIDE = 128
 
-files = sorted(glob.glob("chunks/chunk_*.parquet"))
+""" files = sorted(glob.glob("chunks/chunk_*.parquet"))
 dfs = [pd.read_parquet(f) for f in files]
 
 df = pd.concat(dfs, ignore_index=True)
 df.to_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
 
-print("Recombined!")
+print("Recombined!") """
 
 if os.path.exists("fishing_bilstm_best.pt"):
     os.remove("fishing_bilstm_best.pt")
@@ -245,7 +245,7 @@ for epoch in range(1, 20):
 # Final test
 # ------------------------------------------------------------------
 import os
-if os.path.exists("fishing_bilstm_best_IDUN.pt"):
+if os.path.exists("bilstm_best_IDUN_all_gear_01_04.pt"):
     model.load_state_dict(torch.load("bilstm_best_IDUN_all_gear_01_04.pt"))
 te = run_epoch(test_loader, train=False)
 print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")
