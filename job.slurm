@@ -2,11 +2,11 @@
 #SBATCH --account=share-ie-itk
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=1:00:00
+#SBATCH --time=0:20:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=16     # 2 CPU cores
 #SBATCH --mem=64G             # GB memory
-#SBATCH --output=output_model2.txt    # Log file
+#SBATCH --output=output_model_20_min.txt    # Log file
 # #SBATCH --mail-user=trulsc00@gmail.com
 # #SBATCH --mail-type=ALL
 
