@@ -10,21 +10,20 @@ import glob
 WINDOW = 256
 STRIDE = 128
 
-""" files = sorted(glob.glob("chunks/chunk_*.parquet"))
+files = sorted(glob.glob("chunks/chunk_*.parquet"))
 dfs = [pd.read_parquet(f) for f in files]
 
 df = pd.concat(dfs, ignore_index=True)
 df.to_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
 
-print("Recombined!") """
+print("Recombined!")
 
 if os.path.exists("fishing_bilstm_best.pt"):
     os.remove("fishing_bilstm_best.pt")
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
-#df = pd.read_csv("first_50_feats.csv")
-df = pd.read_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
+#df = pd.read_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
 
 # Split into train test and validation set by mmsi so that no vessel appear in both.
 rng = np.random.default_rng(42)
@@ -40,7 +39,6 @@ print(df["sample_weight"].value_counts())
 
 print("Labeled y distribution:")
 print(df[df["sample_weight"] == 1]["y_train"].value_counts())
-
 
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))

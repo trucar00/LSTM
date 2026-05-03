@@ -8,10 +8,20 @@ print(df.columns)
 
 df.to_parquet("ais_conf_negs_w_reports.parquet", index=False) """
 
-df = pd.read_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
+""" df = pd.read_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
 print(len(df))
 df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "dist_to_shore_km", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
 print(df["report"].unique())
 print(df.head())
-print(df.columns)
+print(df.columns) """
 #df.to_parquet("upload_me.parquet", index=False)
+
+df = pd.read_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
+print("All sample weights:")
+print(df["sample_weight"].value_counts())
+
+print(df[df["y"] == 0][["y", "y_train", "sample_weight"]].tail())
+
+print("Labeled y distribution:")
+print(df[df["sample_weight"] == 1]["y_train"].value_counts())
+

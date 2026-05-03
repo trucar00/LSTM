@@ -34,6 +34,12 @@ FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", 
 
 df = pd.read_parquet("Data/all_gear_conf_01_04.parquet")
 
+df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
+df.loc[df["unknown_no_fishing"], "report"] = "unknown"
+
+df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
+print(df.head())
+
 counts = df["report"].value_counts()
 print(counts)
 
@@ -102,7 +108,7 @@ def add_features(df):
     df["dcog"] = angle_wrap(df["cog"] - df["prev_cog"]) / df["dt"]
 
     # Remove invalid rows
-    feature_cols = ["dt", "dist_to_prev", "speed_calc_ms", "accel", "jerk", "dcog"]
+    feature_cols = ["dt", "dist_to_prev", "speed_calc_ms", "accel", "jerk", "dcog", "dist_to_shore_km"]
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(subset=feature_cols).copy()
 

@@ -6,7 +6,7 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=16     # 2 CPU cores
 #SBATCH --mem=64G             # GB memory
-#SBATCH --output=output_model_20_min.txt    # Log file
+#SBATCH --output=output_model_40_min.txt    # Log file
 # #SBATCH --mail-user=trulsc00@gmail.com
 # #SBATCH --mail-type=ALL
 
