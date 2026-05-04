@@ -7,8 +7,8 @@ from tqdm import tqdm
 import os
 import glob
 
-WINDOW = 256
-STRIDE = 128
+WINDOW = 128
+STRIDE = 64
 
 """ files = sorted(glob.glob("chunks/chunk_*.parquet"))
 dfs = [pd.read_parquet(f) for f in files]
@@ -228,6 +228,9 @@ def run_epoch(loader, train: bool):
 # ------------------------------------------------------------------
 # Train
 # ------------------------------------------------------------------
+
+model_name = "bilstm_best_10e_all_gear_01_04_dist_128window.pt"
+
 best_val = float("inf")
 for epoch in range(1, 15):
     tr = run_epoch(train_loader, train=True)
@@ -237,13 +240,13 @@ for epoch in range(1, 15):
           f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f} acc {vl[4]:.3f}")
     if vl[0] < best_val:
         best_val = vl[0]
-        torch.save(model.state_dict(), "bilstm_best_10e_all_gear_01_04_dist.pt")
+        torch.save(model.state_dict(), model_name)
 
 # ------------------------------------------------------------------
 # Final test
 # ------------------------------------------------------------------
 import os
-if os.path.exists("bilstm_best_10e_all_gear_01_04_dist.pt"):
-    model.load_state_dict(torch.load("bilstm_best_10e_all_gear_01_04_dist.pt"))
+if os.path.exists(model_name):
+    model.load_state_dict(torch.load(model_name))
 te = run_epoch(test_loader, train=False)
 print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")

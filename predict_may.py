@@ -9,10 +9,10 @@ STRIDE = 128
 
 FEATURES = [
     "cog_sin", "cog_cos", "speed_calc_ms", "ra_accel",
-    "ra_jerk", "log_dist", "ra_dcog", "log_dt"
+    "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"
 ]
 
-MODEL_PATH = "bilstm_best_IDUN_all_gear_01_04.pt"
+MODEL_PATH = "models/bilstm_best_10e_all_gear_01_04_dist.pt"
 
 # --------------------------------------------------
 # Same model class as training
@@ -137,7 +137,7 @@ df_may["pred_fishing"] = (df_may["p_fishing"] > 0.5).astype(int)
 
 df_may = df_may.drop(columns=["pred_sum", "pred_count"])
 
-df_may.to_parquet("may_predictions_bilstm.parquet", index=False)
+df_may.to_parquet("may_predictions_bilstm_w_dist.parquet", index=False)
 
 print(df_may[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
 print(df_may["pred_fishing"].value_counts())

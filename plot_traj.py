@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-df = pd.read_parquet("may_predictions_bilstm.parquet")
+df = pd.read_parquet("may_predictions_bilstm_w_dist.parquet")
 
 fishing_df = df[df["report"] == "fishing"]
 
