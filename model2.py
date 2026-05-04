@@ -21,7 +21,7 @@ print("Recombined!") """
 if os.path.exists("fishing_bilstm_best.pt"):
     os.remove("fishing_bilstm_best.pt")
 
-FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
+FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
 
 df = pd.read_parquet("ais_conf_labeled_features_01_04_all_gear.parquet")
 
@@ -229,7 +229,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 best_val = float("inf")
-for epoch in range(1, 10):
+for epoch in range(1, 15):
     tr = run_epoch(train_loader, train=True)
     vl = run_epoch(val_loader,   train=False)
     scheduler.step(vl[0])
@@ -237,13 +237,13 @@ for epoch in range(1, 10):
           f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f} acc {vl[4]:.3f}")
     if vl[0] < best_val:
         best_val = vl[0]
-        torch.save(model.state_dict(), "bilstm_best_10e_all_gear_01_04.pt")
+        torch.save(model.state_dict(), "bilstm_best_10e_all_gear_01_04_dist.pt")
 
 # ------------------------------------------------------------------
 # Final test
 # ------------------------------------------------------------------
 import os
-if os.path.exists("bilstm_best_10e_all_gear_01_04.pt"):
-    model.load_state_dict(torch.load("bilstm_best_IDUN_all_gear_01_04.pt"))
+if os.path.exists("bilstm_best_10e_all_gear_01_04_dist.pt"):
+    model.load_state_dict(torch.load("bilstm_best_10e_all_gear_01_04_dist.pt"))
 te = run_epoch(test_loader, train=False)
 print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")
