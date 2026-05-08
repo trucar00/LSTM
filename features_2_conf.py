@@ -32,12 +32,13 @@ def angle_wrap(a):
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
 
-df = pd.read_parquet("Data/all_gear_conf_05.parquet")
+df = pd.read_parquet("Data/ais_ers_labels_clean_05_w_dist.parquet")
 
-df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
-df.loc[df["unknown_no_fishing"], "report"] = "unknown"
+#df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
+#df.loc[df["unknown_no_fishing"], "report"] = "unknown"
 
-df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
+#df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
+df = df.drop(columns=["close_to_shore"])
 print(df.head())
 
 counts = df["report"].value_counts()
@@ -85,13 +86,13 @@ def add_features(df):
     df["cog_cos"] = np.cos(np.radians(df["cog"]))
 
     # Binary label
-    df["y"] = np.nan
-    df.loc[df["report"] == "fishing", "y"] = 1
-    df.loc[df["report"] == "conf_no_fishing", "y"] = 0
+    #df["y"] = np.nan
+    #df.loc[df["report"] == "fishing", "y"] = 1
+    #df.loc[df["report"] == "conf_no_fishing", "y"] = 0
     
     # Sample weight, unknown = 0
-    df["sample_weight"] = df["y"].notna().astype(np.float32)
-    df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
+    #df["sample_weight"] = df["y"].notna().astype(np.float32)
+    #df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
 
     # Calculated speed in m/s
     df["speed_calc_ms"] = df["dist_to_prev"] / df["dt"]
@@ -137,11 +138,33 @@ print(counts)
 
 print(df[FEATURES].isna().sum())
 print(np.isinf(df[FEATURES]).sum())
-print(df["y"].value_counts(dropna=False))
+#print(df["y"].value_counts(dropna=False))
 
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))
 
-df.to_parquet("ais_conf_labeled_features_05_all_gear.parquet", index=False)
+row = df.loc[df["speed_calc_ms"].idxmax()]
+print(row)
+traj_id = row["trajectory_id"]
+time = row["date_time_utc"]
+
+prev_row = df[
+    (df["trajectory_id"] == traj_id) &
+    (df["date_time_utc"] < time)
+].sort_values("date_time_utc").iloc[-1]
+
+print("CURRENT:\n", row[["trajectory_id", "lat","lon","date_time_utc","dt","dist_to_prev","speed_calc_ms"]])
+print("\nPREVIOUS:\n", prev_row[["lat","lon","date_time_utc"]])
+
+dist = haversine(
+    prev_row["lat"], prev_row["lon"],
+    row["lat"], row["lon"]
+)
+print("Distance (m):", dist)
+print("dt (s):", row["dt"])
+print("speed (m/s):", dist / row["dt"])
+
+
+df.to_parquet("ais_all_msgs_labeled_features_05_all_gear.parquet", index=False)
 
 

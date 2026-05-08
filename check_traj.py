@@ -1,6 +1,17 @@
 import pandas as pd
-get_cols = ["mmsi", "trajectory_id", "date_time_utc", "lon", "lat", "dt", "y", "cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk","log_dist", "ra_dcog", "log_dt"]
+import matplotlib.pyplot as plt
 
-df = pd.read_csv("ais_labeled_features.csv", usecols=get_cols)
+check = "257770000-0"
 
-df.to_csv("ais_labeled_features.csv", index=False)
+df = pd.read_parquet("Data/ais_ers_labels_clean_05_w_dist.parquet")
+df_traj = df.loc[df["trajectory_id"] == check].copy()
+
+df_traj["date_time_utc"] = pd.to_datetime(df_traj["date_time_utc"])
+df_traj = df_traj.sort_values("date_time_utc")
+
+plt.scatter(df_traj["lon"], df_traj["lat"], s=5)
+
+plt.show()
+
+
+print(df_traj.tail())

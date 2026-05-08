@@ -1,6 +1,11 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+from scipy.ndimage import gaussian_filter
 import numpy as np
+import geopandas as gpd
+import contextily as ctx
+from shapely.geometry import box
 
 df = pd.read_parquet("may_predictions_bilstm_w_dist.parquet")
 
@@ -51,7 +56,7 @@ traj_ids = df["trajectory_id"].unique()
 rng = np.random.default_rng(42)
 sampled_traj_ids = rng.choice(
     traj_ids,
-    size=int(0.25 * len(traj_ids)),
+    size=int(0.1 * len(traj_ids)),
     replace=False
 )
 
@@ -64,13 +69,88 @@ fishing = df_sample[df_sample["pred_fishing"] == 1]
 non_fishing = df_sample[df_sample["pred_fishing"] == 0]
 
 plt.scatter(non_fishing["lon"], non_fishing["lat"],
-            s=2, color="blue", alpha=0.5, label="Non-fishing")
+            s=1, color="blue", alpha=0.5, label="Non-fishing")
 
 plt.scatter(fishing["lon"], fishing["lat"],
-            s=2, color="red", alpha=0.5, label="Fishing")
+            s=1, color="red", alpha=0.5, label="Fishing")
 
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")
 plt.title("25% of Trajectories — May Predictions")
 plt.legend()
 plt.show()
+
+
+# HEATMAP
+# Only messages predicted as fishing
+
+def heatmap(df):
+    fishing_pred = df[df["pred_fishing"] == 1].copy()
+
+    # Lon/lat -> Web Mercator, same projection as contextily
+    gdf = gpd.GeoDataFrame(
+        fishing_pred,
+        geometry=gpd.points_from_xy(fishing_pred["lon"], fishing_pred["lat"]),
+        crs="EPSG:4326"
+    ).to_crs(epsg=3857)
+
+    gdf["x"] = gdf.geometry.x
+    gdf["y"] = gdf.geometry.y
+
+    # Fixed full grid in EPSG:3857
+    n_bins = 300
+    x_edges = np.linspace(gdf["x"].min(), gdf["x"].max(), n_bins + 1)
+    y_edges = np.linspace(gdf["y"].min(), gdf["y"].max(), n_bins + 1)
+
+    gdf["x_bin"] = np.searchsorted(x_edges, gdf["x"], side="right") - 1
+    gdf["y_bin"] = np.searchsorted(y_edges, gdf["y"], side="right") - 1
+
+    gdf = gdf[
+        (gdf["x_bin"] >= 0) & (gdf["x_bin"] < n_bins) &
+        (gdf["y_bin"] >= 0) & (gdf["y_bin"] < n_bins)
+    ]
+
+    counts = (
+        gdf.groupby(["x_bin", "y_bin"])["trajectory_id"]
+        .nunique()
+        .reset_index(name="count")
+    )
+
+    # Important: full fixed-size grid, not compressed unstack output
+    Z = np.zeros((n_bins, n_bins), dtype=float)
+    Z[counts["x_bin"], counts["y_bin"]] = counts["count"]
+
+    Z = gaussian_filter(Z, sigma=0.5)
+    Z = np.ma.masked_where(Z < 0.2, Z)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    ax.set_xlim(x_edges.min(), x_edges.max())
+    ax.set_ylim(y_edges.min(), y_edges.max())
+
+    ctx.add_basemap(
+        ax,
+        source=ctx.providers.CartoDB.Positron,
+        zoom=6
+    )
+
+    cmap = plt.cm.viridis.copy()
+    cmap.set_bad(alpha=0)
+
+    img = ax.imshow(
+        Z.T,
+        origin="lower",
+        extent=[x_edges.min(), x_edges.max(), y_edges.min(), y_edges.max()],
+        cmap=cmap,
+        norm=LogNorm(vmin=1, vmax=Z.max()),
+        alpha=0.7,
+        interpolation="nearest",
+        zorder=10
+    )
+
+    plt.colorbar(img, ax=ax, label="Number of unique trajectories")
+    ax.set_title("Fishing Activity Heatmap over OpenStreetMap")
+    ax.set_axis_off()
+    plt.show()
+
+heatmap(df)

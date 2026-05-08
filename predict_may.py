@@ -4,15 +4,15 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-WINDOW = 256
-STRIDE = 128
+WINDOW = 128 # change depending on what window sized has been used
+STRIDE = 64
 
 FEATURES = [
     "cog_sin", "cog_cos", "speed_calc_ms", "ra_accel",
     "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"
 ]
 
-MODEL_PATH = "models/bilstm_best_10e_all_gear_01_04_dist.pt"
+MODEL_PATH = "models/bilstm_best_10e_all_gear_01_04_dist_128window.pt"
 
 # --------------------------------------------------
 # Same model class as training
@@ -137,7 +137,7 @@ df_may["pred_fishing"] = (df_may["p_fishing"] > 0.5).astype(int)
 
 df_may = df_may.drop(columns=["pred_sum", "pred_count"])
 
-df_may.to_parquet("may_predictions_bilstm_w_dist.parquet", index=False)
+df_may.to_parquet("may_predictions_bilstm_w_dist_128window.parquet", index=False)
 
 print(df_may[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
 print(df_may["pred_fishing"].value_counts())
