@@ -8,6 +8,7 @@ import contextily as ctx
 from shapely.geometry import box
 
 df = pd.read_parquet("may_predictions_bilstm_w_dist.parquet")
+print(df.columns)
 
 fishing_df = df[df["report"] == "fishing"]
 
@@ -77,6 +78,65 @@ plt.scatter(fishing["lon"], fishing["lat"],
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")
 plt.title("25% of Trajectories — May Predictions")
+plt.legend()
+plt.show()
+
+# False positives
+fp_df = df_sample[
+    (df_sample["pred_fishing"] == 1) &
+    (df_sample["report"] != "fishing")
+].copy()
+
+# True positives
+tp_df = df_sample[
+    (df_sample["pred_fishing"] == 1) &
+    (df_sample["report"] == "fishing")
+].copy()
+
+# Trajectories that contain ANY predicted fishing (both TP + FP)
+traj_ids = df_sample[
+    df_sample["pred_fishing"] == 1
+]["trajectory_id"].unique()
+
+# Context: all points from those trajectories
+context_df = df_sample[df_sample["trajectory_id"].isin(traj_ids)]
+
+# Plot
+plt.figure(figsize=(10, 10))
+
+# Context (all trajectory points)
+plt.scatter(
+    context_df["lon"],
+    context_df["lat"],
+    s=1,
+    color="blue",
+    alpha=0.3,
+    label="Trajectory context"
+)
+
+# True positives (green)
+plt.scatter(
+    tp_df["lon"],
+    tp_df["lat"],
+    s=2,
+    color="green",
+    alpha=0.7,
+    label="True positives"
+)
+
+# False positives (red)
+plt.scatter(
+    fp_df["lon"],
+    fp_df["lat"],
+    s=2,
+    color="red",
+    alpha=0.7,
+    label="False positives"
+)
+
+plt.xlabel("Longitude")
+plt.ylabel("Latitude")
+plt.title("Predicted fishing with context (TP=green, FP=red)")
 plt.legend()
 plt.show()
 
