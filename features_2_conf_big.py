@@ -172,16 +172,27 @@ def check_speed(df):
 
 def concat():
     for i in range(1, 12+1, 3):
-        dfs = []
-        print("Reading parquets")
-        for gear in GEAR:
-            for year in range(2022, 2024+1):
+        
+        for year in range(2022, 2024+1):
+            dfs = []
+            for gear in GEAR:
                 df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident2/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
                 dfs.append(df)
         
-        all_gear_full_month_df = pd.concat(dfs, ignore_index=True)
-        all_gear_full_month_df.to_parquet(f"three_months/{year}_{i}_{i+2}.parquet", index=False)
+            all_gear_full_month_df = pd.concat(dfs, ignore_index=True)
+            all_gear_full_month_df.to_parquet(f"three_months/{year}_{i}_{i+2}.parquet", index=False)
 
+def main():
+    for i in range(1, 12+1, 3):
+        
+        for year in range(2022, 2024+1):
+            dfs = []
+            for gear in GEAR:
+                #df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident2/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
+                path = f"{gear}_{year}_{i}_{i+2}.parquet"
+                dfs.append(path)
+
+            print(dfs)
 
 if __name__ == "__main__":
     concat()
