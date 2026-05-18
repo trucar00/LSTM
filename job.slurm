@@ -18,7 +18,7 @@ module purge
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate venv
-source ~/venv/py311/bin/activate # VENV FOR GPU
+source ~/venv/myenv/bin/activate # VENV FOR GPU
 
 echo "Running on node: $(hostname)"
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
