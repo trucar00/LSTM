@@ -146,7 +146,7 @@ print(df["y"].value_counts(dropna=False))
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
 print(df[FEATURES].abs().max().sort_values(ascending=False))
 
-df.to_csv("ais_labeled_features.csv", index=False)
+df.to_parquet("ais_labeled_features.csv", index=False)
 
 """ for traj_id, d in df.groupby("trajectory_id"):
     d = d.sort_values("date_time_utc")

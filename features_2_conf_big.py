@@ -31,25 +31,26 @@ def angle_wrap(a):
 # ---------------------------
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
+GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn"]
 
-df = pd.read_parquet("Data/ais_ers_labels_clean_05_w_dist.parquet")
 
-#df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
-#df.loc[df["unknown_no_fishing"], "report"] = "unknown"
+def column_fixing(df):
+    df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
+    df.loc[df["unknown_no_fishing"], "report"] = "unknown"
 
-#df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
-df = df.drop(columns=["close_to_shore"])
-print(df.head())
+    df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
+    print(df.head())
 
-counts = df["report"].value_counts()
-print(counts)
+    counts = df["report"].value_counts()
+    print(counts)
 
-# Include all fishing as FISHING
-gears = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn"]
-for gear in gears:
-    df.loc[df["report"] == gear, "report"] = "fishing"
+    # Include all fishing as FISHING
+   
+    for gear in GEAR:
+        df.loc[df["report"] == gear, "report"] = "fishing"
 
-print(df["report"].unique())
+    print(df["report"].unique())
+    return df
 
 # Build features
 
@@ -86,13 +87,13 @@ def add_features(df):
     df["cog_cos"] = np.cos(np.radians(df["cog"]))
 
     # Binary label
-    #df["y"] = np.nan
-    #df.loc[df["report"] == "fishing", "y"] = 1
-    #df.loc[df["report"] == "conf_no_fishing", "y"] = 0
+    df["y"] = np.nan
+    df.loc[df["report"] == "fishing", "y"] = 1
+    df.loc[df["report"] == "conf_no_fishing", "y"] = 0
     
     # Sample weight, unknown = 0
-    #df["sample_weight"] = df["y"].notna().astype(np.float32)
-    #df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
+    df["sample_weight"] = df["y"].notna().astype(np.float32)
+    df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
 
     # Calculated speed in m/s
     df["speed_calc_ms"] = df["dist_to_prev"] / df["dt"]
@@ -132,7 +133,7 @@ def add_features(df):
 
 #df = add_features(df)
 
-counts = df["report"].value_counts().reset_index()
+""" counts = df["report"].value_counts().reset_index()
 counts.columns = ["report", "nr_messages"]
 print(counts)
 
@@ -141,7 +142,7 @@ print(np.isinf(df[FEATURES]).sum())
 #print(df["y"].value_counts(dropna=False))
 
 print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
-print(df[FEATURES].abs().max().sort_values(ascending=False))
+print(df[FEATURES].abs().max().sort_values(ascending=False)) """
 
 def check_speed(df):
     row = df.loc[df["speed_calc_ms"].idxmax()]
@@ -166,9 +167,21 @@ def check_speed(df):
     print("speed (m/s):", dist / row["dt"])
 
 
-df.to_parquet("ais_all_msgs_labeled_features_05_all_gear.parquet", index=False)
-
-for i in range(1, 12+1, 3):
-    print(i, i+3)
+#df.to_parquet("ais_all_msgs_labeled_features_05_all_gear.parquet", index=False)
 
 
+def concat():
+    for i in range(1, 12+1, 3):
+        dfs = []
+        print("Reading parquets")
+        for gear in GEAR:
+            for year in range(2022, 2024+1):
+                df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident2/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
+                dfs.append(df)
+        
+        all_gear_full_month_df = pd.concat(dfs, ignore_index=True)
+        all_gear_full_month_df.to_parquet(f"three_months/{year}_{i}_{i+2}.parquet", index=False)
+
+
+if __name__ == "__main__":
+    concat()
