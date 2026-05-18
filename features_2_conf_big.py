@@ -192,7 +192,7 @@ def main():
             df = column_fixing(df)
             df = add_features(df)
             check_feats(df)
-            df.to_parquet(f"{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/feats/{year}_{i}_{i+2}_feats.parquet", index=False)
 
 
 if __name__ == "__main__":
