@@ -39,7 +39,6 @@ def column_fixing(df):
     df.loc[df["unknown_no_fishing"], "report"] = "unknown"
 
     df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
-    print(df.head())
 
     counts = df["report"].value_counts()
     print(counts)
@@ -133,16 +132,19 @@ def add_features(df):
 
 #df = add_features(df)
 
-""" counts = df["report"].value_counts().reset_index()
-counts.columns = ["report", "nr_messages"]
-print(counts)
+def check_feats(df):
+    counts = df["report"].value_counts().reset_index()
+    counts.columns = ["report", "nr_messages"]
+    print(counts)
 
-print(df[FEATURES].isna().sum())
-print(np.isinf(df[FEATURES]).sum())
-#print(df["y"].value_counts(dropna=False))
+    print(df[FEATURES].isna().sum())
+    print(np.isinf(df[FEATURES]).sum())
+    #print(df["y"].value_counts(dropna=False))
 
-print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
-print(df[FEATURES].abs().max().sort_values(ascending=False)) """
+    print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
+    print(df[FEATURES].abs().max().sort_values(ascending=False))
+    return
+
 
 def check_speed(df):
     row = df.loc[df["speed_calc_ms"].idxmax()]
@@ -183,16 +185,15 @@ def concat():
             all_gear_full_month_df.to_parquet(f"three_months/{year}_{i}_{i+2}.parquet", index=False)
 
 def main():
-    for i in range(1, 12+1, 3):
-        
-        for year in range(2022, 2024+1):
-            dfs = []
-            for gear in GEAR:
-                #df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident2/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
-                path = f"{gear}_{year}_{i}_{i+2}.parquet"
-                dfs.append(path)
+    for year in range(2022, 2024+1):
+        for i in range(1, 12+1, 3):
+            df = pd.read_parquet(f"three_months/{year}_{i}_{i+2}.parquet", engine="pyarrow")
+            print("Fixing columns")
+            df = column_fixing(df)
+            df = add_features(df)
+            check_feats(df)
+            df.to_parquet(f"{year}_{i}_{i+2}_feats.parquet", index=False)
 
-            print(dfs)
 
 if __name__ == "__main__":
-    concat()
+    main()
