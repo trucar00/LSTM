@@ -21,6 +21,7 @@ FEATURES = BASE_FEATURES + SEASON_FEATURES
 all_mmsis = set()
 
 for f in files:
+    print("reading ", f)
     m = pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique()
     all_mmsis.update(m)
 
@@ -68,6 +69,7 @@ for f in files:
 
 mu = sum_x / count
 sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
+print("mu and sigma found")
 
 
 class AISWindowDataset(IterableDataset):
@@ -231,6 +233,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 # ------------------------------------------------------------------
 # Epoch runner — per-message metrics (padding ignored), NaN-safe
 # ------------------------------------------------------------------
+print("Starting epochs")
 def run_epoch(loader, train: bool):
     model.train() if train else model.eval()
     tot_loss, tot_n = 0.0, 0

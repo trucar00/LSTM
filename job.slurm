@@ -2,7 +2,7 @@
 #SBATCH --account=share-ie-itk
 #SBATCH --partition=CPUQ
 # #SBATCH --gres=gpu:1
-#SBATCH --time=0:30:00
+#SBATCH --time=0:10:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=16     # 2 CPU cores
 #SBATCH --mem=100G             # GB memory
