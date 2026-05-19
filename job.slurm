@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --account=share-ie-itk
-#SBATCH --partition=CPUQ
-# #SBATCH --gres=gpu:1
-#SBATCH --time=3:00:00
+#SBATCH --partition=GPUQ
+#SBATCH --gres=gpu:1
+#SBATCH --time=0:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=32     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=output_features_biggy.txt    # Log file
+#SBATCH --output=output_model_biggy.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -18,7 +18,7 @@ module purge
 module load Python/3.11.5-GCCcore-13.2.0
 
 # Activate venv
-source ~/venv/myenv/bin/activate # VENV FOR GPU
+source ~/venv/py311/bin/activate # VENV FOR GPU
 
 echo "Running on node: $(hostname)"
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
@@ -36,4 +36,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python features_2_conf_big.py
+python model2_big.py
