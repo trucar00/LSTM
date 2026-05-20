@@ -32,6 +32,23 @@ print(f"conf_no_fishing points: {n_total}")
 print(f"Predicted non-fishing: {n_correct}")
 print(f"Accuracy (conf_no_fishing): {accuracy_conf:.3f}")
 
+pred_fishing_df = df[df["pred_fishing"] == 1]
+
+n_predicted_fishing = len(pred_fishing_df)
+
+true_positives = (
+    (pred_fishing_df["report"] == "fishing")
+).sum()
+
+precision = (
+    true_positives / n_predicted_fishing
+    if n_predicted_fishing > 0 else 0
+)
+
+print(f"Predicted fishing points: {n_predicted_fishing}")
+print(f"True fishing among predictions: {true_positives}")
+print(f"Precision: {precision:.3f}")
+
 """ for traj_id, traj in df.groupby("trajectory_id"):
     plt.figure(figsize=(6, 6))
 
@@ -51,18 +68,18 @@ print(f"Accuracy (conf_no_fishing): {accuracy_conf:.3f}")
     plt.show() """
 
 # Get unique trajectories
-traj_ids = df["trajectory_id"].unique()
+traj_ids = df["mmsi"].unique()
 
 # Sample 25%
 rng = np.random.default_rng(42)
 sampled_traj_ids = rng.choice(
     traj_ids,
-    size=int(0.1 * len(traj_ids)),
+    size=int(0.25 * len(traj_ids)),
     replace=False
 )
 
 # Filter dataframe
-df_sample = df[df["trajectory_id"].isin(sampled_traj_ids)]
+df_sample = df[df["mmsi"].isin(sampled_traj_ids)]
 
 plt.figure(figsize=(10, 10))
 
@@ -77,9 +94,17 @@ plt.scatter(fishing["lon"], fishing["lat"],
 
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")
-plt.title("25% of Trajectories — May Predictions")
+plt.title("25% of vessels — May Predictions")
 plt.legend()
 plt.show()
+
+# False negatives: reported fishing but predicted non-fishing
+fn_df = df_sample[
+    (df_sample["report"] == "fishing") &
+    (df_sample["pred_fishing"] == 0)
+].copy()
+
+print("NR of fn: ", len(fn_df))
 
 # False positives
 fp_df = df_sample[
@@ -92,6 +117,8 @@ tp_df = df_sample[
     (df_sample["pred_fishing"] == 1) &
     (df_sample["report"] == "fishing")
 ].copy()
+
+print("NR of tp: ", len(tp_df))
 
 # Trajectories that contain ANY predicted fishing (both TP + FP)
 traj_ids = df_sample[
@@ -116,6 +143,27 @@ plt.scatter(
 
 # True positives (green)
 plt.scatter(
+    fn_df["lon"],
+    fn_df["lat"],
+    s=2,
+    color="red",
+    alpha=0.7,
+    label="False negatives"
+)
+
+
+
+# False positives (red)
+plt.scatter(
+    fp_df["lon"],
+    fp_df["lat"],
+    s=2,
+    color="orange",
+    alpha=0.7,
+    label="False positives"
+)
+
+plt.scatter(
     tp_df["lon"],
     tp_df["lat"],
     s=2,
@@ -124,21 +172,57 @@ plt.scatter(
     label="True positives"
 )
 
-# False positives (red)
-plt.scatter(
-    fp_df["lon"],
-    fp_df["lat"],
-    s=2,
-    color="red",
-    alpha=0.7,
-    label="False positives"
-)
+
 
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")
 plt.title("Predicted fishing with context (TP=green, FP=red)")
 plt.legend()
 plt.show()
+
+# Messages reported as fishing
+reported_fishing = df_sample[
+    df_sample["report"] == "fishing"
+].copy()
+
+# Trajectories containing reported fishing
+traj_ids = reported_fishing["trajectory_id"].unique()
+
+# Context from those trajectories
+context_df = df_sample[
+    df_sample["trajectory_id"].isin(traj_ids)
+]
+
+plt.figure(figsize=(10, 10))
+
+# All trajectory points in background
+plt.scatter(
+    context_df["lon"],
+    context_df["lat"],
+    s=1,
+    color="lightgray",
+    alpha=0.3,
+    label="Trajectory context"
+)
+
+# Reported fishing messages
+plt.scatter(
+    reported_fishing["lon"],
+    reported_fishing["lat"],
+    s=2,
+    color="red",
+    alpha=0.8,
+    label="Reported fishing"
+)
+
+plt.xlabel("Longitude")
+plt.ylabel("Latitude")
+plt.title("Reported fishing messages")
+plt.legend()
+
+plt.show()
+
+
 
 
 # HEATMAP
