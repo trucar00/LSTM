@@ -10,13 +10,18 @@ import glob
 WINDOW = 256
 STRIDE = 128
 
-files = sorted(glob.glob("three_months/feats/*.parquet"))
+#files = sorted(glob.glob("three_months/feats/*.parquet"))
+
+files = [
+    "three_months/feats/2024_1_3.parquet",
+    "three_months/feats/2024_4_6.parquet"
+]
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
 
-SEASON_FEATURES = ["month_sin", "month_cos"]
+#SEASON_FEATURES = ["month_sin", "month_cos"]
 
-FEATURES = BASE_FEATURES + SEASON_FEATURES
+FEATURES = BASE_FEATURES #+ SEASON_FEATURES
 
 all_mmsis = set()
 
@@ -59,8 +64,8 @@ for f in files:
     df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
     month = df["date_time_utc"].dt.month
 
-    df["month_sin"] = np.sin(2 * np.pi * month / 12)
-    df["month_cos"] = np.cos(2 * np.pi * month / 12)
+    #df["month_sin"] = np.sin(2 * np.pi * month / 12)
+    #df["month_cos"] = np.cos(2 * np.pi * month / 12)
 
     x = df[FEATURES]
     sum_x += x.sum()
@@ -127,8 +132,8 @@ class AISWindowDataset(IterableDataset):
 
             month = df["date_time_utc"].dt.month
 
-            df["month_sin"] = np.sin(2 * np.pi * month / 12)
-            df["month_cos"] = np.cos(2 * np.pi * month / 12)
+            #df["month_sin"] = np.sin(2 * np.pi * month / 12)
+            #df["month_cos"] = np.cos(2 * np.pi * month / 12)
 
             df[self.features] = (df[self.features] - self.mu) / self.sigma
 
@@ -280,7 +285,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 
-model_name = "full_trained_256.pt"
+model_name = "model_1_6_256.pt"
 
 best_val = float("inf")
 for epoch in range(1, 15):
