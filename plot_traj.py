@@ -7,8 +7,9 @@ import geopandas as gpd
 import contextily as ctx
 from shapely.geometry import box
 
-df = pd.read_parquet("may_predictions_bilstm_w_dist.parquet")
+df = pd.read_parquet("7_9_predictions_bilstm_w_dist_256window.parquet")
 print(df.columns)
+print(df["report"].unique())
 
 fishing_df = df[df["report"] == "fishing"]
 
@@ -74,7 +75,7 @@ traj_ids = df["mmsi"].unique()
 rng = np.random.default_rng(42)
 sampled_traj_ids = rng.choice(
     traj_ids,
-    size=int(0.25 * len(traj_ids)),
+    size=int(0.1 * len(traj_ids)),
     replace=False
 )
 
@@ -94,7 +95,7 @@ plt.scatter(fishing["lon"], fishing["lat"],
 
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")
-plt.title("25% of vessels — May Predictions")
+plt.title("10% of vessels — May Predictions")
 plt.legend()
 plt.show()
 

@@ -44,6 +44,8 @@ def column_fixing(df):
     print(counts)
 
     # Include all fishing as FISHING
+
+    df["gear_report"] = df["report"]
    
     for gear in GEAR:
         df.loc[df["report"] == gear, "report"] = "fishing"
@@ -192,7 +194,7 @@ def main():
             df = column_fixing(df)
             df = add_features(df)
             check_feats(df)
-            df.to_parquet(f"three_months/feats/{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/feats_w_report/{year}_{i}_{i+2}_feats.parquet", index=False)
 
 
 if __name__ == "__main__":
