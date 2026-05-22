@@ -36,4 +36,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python features_2_conf_big.py
+python model2_big.py
