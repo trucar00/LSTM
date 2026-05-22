@@ -16,7 +16,7 @@ STRIDE = 128
 files = [
     "three_months/feats/2023_1_3_feats.parquet",
     "three_months/feats/2023_4_6_feats.parquet",
-    "three_momths/feats/2023_7_9_feats.parquet",
+    "three_months/feats/2023_7_9_feats.parquet",
     "three_months/feats/2023_10_12_feats.parquet"
 ]
 
