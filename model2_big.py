@@ -79,9 +79,8 @@ mu = sum_x / count
 sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
 print("mu and sigma found")
 
-with open("parameters_full2023.pkl") as f: # saving mu and sigma so it can be used later when predicting
+with open("parameters_full2023.pkl", "wb") as f:
     pickle.dump({"mu": mu, "sigma": sigma}, f)
-
 
 
 class AISWindowDataset(IterableDataset):

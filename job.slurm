@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=CPUQ
-##SBATCH --gres=gpu:1
-#SBATCH --time=5:00:00
+#SBATCH --partition=GPUQ
+#SBATCH --gres=gpu:1
+#SBATCH --time=1:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=16     # 2 CPU cores
-#SBATCH --mem=128G             # GB memory
-#SBATCH --output=output_feats_w_old_report.txt    # Log file
+#SBATCH --mem=64G             # GB memory
+#SBATCH --output=output_full_2023.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
