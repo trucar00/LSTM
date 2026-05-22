@@ -138,16 +138,14 @@ class AISWindowDataset(IterableDataset):
 
             month = df["date_time_utc"].dt.month
 
-            #df["month_sin"] = np.sin(2 * np.pi * month / 12)
-            #df["month_cos"] = np.cos(2 * np.pi * month / 12)
+            df["month_sin"] = np.sin(2 * np.pi * month / 12)
+            df["month_cos"] = np.cos(2 * np.pi * month / 12)
 
             df[self.features] = (df[self.features] - self.mu) / self.sigma
 
             df["ra_accel"] = df["ra_accel"].clip(-5, 5)
             df["ra_jerk"]  = df["ra_jerk"].clip(-5, 5)
             df["ra_dcog"]  = df["ra_dcog"].clip(-5, 5)
-
-            
 
             df = df.sort_values(["trajectory_id", "date_time_utc"])
 
