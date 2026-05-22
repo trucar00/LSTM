@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, IterableDataset
 from tqdm import tqdm
 import os
+import pickle
 import glob
 
 WINDOW = 256
@@ -13,15 +14,17 @@ STRIDE = 128
 #files = sorted(glob.glob("three_months/feats/*.parquet"))
 
 files = [
-    "three_months/feats/2024_1_3_feats.parquet",
-    "three_months/feats/2024_4_6_feats.parquet"
+    "three_months/feats/2023_1_3_feats.parquet",
+    "three_months/feats/2023_4_6_feats.parquet",
+    "three_momths/feats/2023_7_9_feats.parquet",
+    "three_months/feats/2023_10_12_feats.parquet"
 ]
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
 
-#SEASON_FEATURES = ["month_sin", "month_cos"]
+SEASON_FEATURES = ["month_sin", "month_cos"]
 
-FEATURES = BASE_FEATURES #+ SEASON_FEATURES
+FEATURES = BASE_FEATURES + SEASON_FEATURES
 
 all_mmsis = set()
 
@@ -64,8 +67,8 @@ for f in files:
     df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
     month = df["date_time_utc"].dt.month
 
-    #df["month_sin"] = np.sin(2 * np.pi * month / 12)
-    #df["month_cos"] = np.cos(2 * np.pi * month / 12)
+    df["month_sin"] = np.sin(2 * np.pi * month / 12)
+    df["month_cos"] = np.cos(2 * np.pi * month / 12)
 
     x = df[FEATURES]
     sum_x += x.sum()
@@ -75,6 +78,10 @@ for f in files:
 mu = sum_x / count
 sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
 print("mu and sigma found")
+
+with open("parameters_full2023.pkl") as f: # saving mu and sigma so it can be used later when predicting
+    pickle.dump({"mu": mu, "sigma": sigma}, f)
+
 
 
 class AISWindowDataset(IterableDataset):
@@ -285,7 +292,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 
-model_name = "model_1_6_256.pt"
+model_name = "model_full_2023_256.pt"
 
 best_val = float("inf")
 for epoch in range(1, 15):
