@@ -2,7 +2,7 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=00:15:00
+#SBATCH --time=1:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=16     # 2 CPU cores
 #SBATCH --mem=64G             # GB memory
