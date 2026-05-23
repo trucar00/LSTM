@@ -3,21 +3,25 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+import pickle
 
 WINDOW = 256 # change depending on what window sized has been used
 STRIDE = 128
 
 train_files = [
-    "Data/2024_1_3_feats.parquet",
-    "Data/2024_4_6_feats.parquet"
+    "three_months/feats/2023_1_3_feats.parquet",
+    "three_months/feats/2023_4_6_feats.parquet",
+    "three_months/feats/2023_7_9_feats.parquet",
+    "three_months/feats/2023_10_12_feats.parquet"
 ]
 
-FEATURES = [
-    "cog_sin", "cog_cos", "speed_calc_ms", "ra_accel",
-    "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"
-]
+BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
 
-MODEL_PATH = "models/model_1_6_256.pt"
+SEASON_FEATURES = ["month_sin", "month_cos"]
+
+FEATURES = BASE_FEATURES + SEASON_FEATURES
+
+MODEL_PATH = "model_full_2023_256.pt"
 
 # --------------------------------------------------
 # Same model class as training
@@ -52,7 +56,7 @@ class FishingBiLSTM(nn.Module):
 # --------------------------------------------------
 
 
-all_mmsis = set()
+""" all_mmsis = set()
 
 for f in train_files:
     print("reading ", f)
@@ -91,23 +95,35 @@ for f in train_files:
 
 mu = sum_x / count
 sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
-print("mu and sigma found")
+print("mu and sigma found") """
+
+with open("parameters_full2023.pkl", "rb") as f:
+    params = pickle.load(f)
+
+mu = params["mu"]
+sigma = params["sigma"]
+print("Read mu and sigma from file")
 
 # --------------------------------------------------
 # Load data with already-built features
-# If not built yet: run df_may = add_features(raw_may_df)
+# If not built yet: run df_predict = add_features(raw_may_df)
 # --------------------------------------------------
-df_may = pd.read_parquet("Data/2024_7_9_feats.parquet")
-df_may["date_time_utc"] = pd.to_datetime(df_may["date_time_utc"])
+
+df_predict = pd.read_parquet("three_months/feats/2024_1_3_feats.parquet")
+df_predict["date_time_utc"] = pd.to_datetime(df_predict["date_time_utc"])
+month = df_predict["date_time_utc"].dt.month
+
+df_predict["month_sin"] = np.sin(2 * np.pi * month / 12)
+df_predict["month_cos"] = np.cos(2 * np.pi * month / 12)
 
 # Normalize exactly like training
 for col in FEATURES:
-    df_may[col] = (df_may[col] - mu[col]) / sigma[col]
+    df_predict[col] = (df_predict[col] - mu[col]) / sigma[col]
 
 # Same clipping as training
-df_may["ra_accel"] = df_may["ra_accel"].clip(-5, 5)
-df_may["ra_jerk"]  = df_may["ra_jerk"].clip(-5, 5)
-df_may["ra_dcog"]  = df_may["ra_dcog"].clip(-5, 5)
+df_predict["ra_accel"] = df_predict["ra_accel"].clip(-5, 5)
+df_predict["ra_jerk"]  = df_predict["ra_jerk"].clip(-5, 5)
+df_predict["ra_dcog"]  = df_predict["ra_dcog"].clip(-5, 5)
 
 
 # --------------------------------------------------
@@ -122,18 +138,18 @@ model = FishingBiLSTM(
     dropout=0.3,
 ).to(device)
 
-model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
 model.eval()
 
 # --------------------------------------------------
 # Predict May and merge overlapping window predictions
 # --------------------------------------------------
-df_may = df_may.sort_values(["trajectory_id", "date_time_utc"]).copy()
-df_may["pred_sum"] = 0.0
-df_may["pred_count"] = 0.0
+df_predict = df_predict.sort_values(["trajectory_id", "date_time_utc"]).copy()
+df_predict["pred_sum"] = 0.0
+df_predict["pred_count"] = 0.0
 
 with torch.no_grad():
-    for traj_id, traj in tqdm(df_may.groupby("trajectory_id", sort=False)):
+    for traj_id, traj in tqdm(df_predict.groupby("trajectory_id", sort=False)):
         idx = traj.index.to_numpy()
         X_all = traj[FEATURES].to_numpy(dtype=np.float32)
 
@@ -141,7 +157,12 @@ with torch.no_grad():
         if n < 8:
             continue
 
-        for start in range(0, max(1, n - WINDOW + 1), STRIDE):
+        starts = list(range(0, max(1, n - WINDOW + 1), STRIDE))
+        final_start = max(0, n - WINDOW)
+        if starts[-1] != final_start:
+            starts.append(final_start) # Makes sure that the end of each trajectory is included. 
+
+        for start in starts:
             end = start + WINDOW
 
             x = X_all[start:end]
@@ -162,15 +183,15 @@ with torch.no_grad():
             valid_idx = idx[start:start + L]
             valid_probs = probs[:L]
 
-            df_may.loc[valid_idx, "pred_sum"] += valid_probs
-            df_may.loc[valid_idx, "pred_count"] += 1
+            df_predict.loc[valid_idx, "pred_sum"] += valid_probs
+            df_predict.loc[valid_idx, "pred_count"] += 1
 
-df_may["p_fishing"] = df_may["pred_sum"] / df_may["pred_count"]
-df_may["pred_fishing"] = (df_may["p_fishing"] > 0.5).astype(int)
+df_predict["p_fishing"] = df_predict["pred_sum"] / df_predict["pred_count"]
+df_predict["pred_fishing"] = (df_predict["p_fishing"] > 0.5).astype(int)
 
-df_may = df_may.drop(columns=["pred_sum", "pred_count"])
+df_predict = df_predict.drop(columns=["pred_sum", "pred_count"])
 
-df_may.to_parquet("7_9_predictions_bilstm_w_dist_256window.parquet", index=False)
+df_predict.to_parquet("predictions/1_3_2024_w_full_2023_model_256.parquet", index=False)
 
-print(df_may[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
-print(df_may["pred_fishing"].value_counts())
+print(df_predict[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
+print(df_predict["pred_fishing"].value_counts())
