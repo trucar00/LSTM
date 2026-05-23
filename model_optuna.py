@@ -3,9 +3,11 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, IterableDataset
+import itertools, json, time
 import os
 import pickle
-import glob
+import optuna
+from pathlib import Path
 
 WINDOW = 256
 STRIDE = 128
@@ -13,10 +15,8 @@ STRIDE = 128
 #files = sorted(glob.glob("three_months/feats/*.parquet"))
 
 files = [
-    "three_months/feats/2023_1_3_feats.parquet",
-    "three_months/feats/2023_4_6_feats.parquet",
-    "three_months/feats/2023_7_9_feats.parquet",
-    "three_months/feats/2023_10_12_feats.parquet"
+    "three_months/feats/2024_1_3_feats.parquet",
+    "three_months/feats/2024_7_9_feats.parquet",
 ]
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
@@ -41,16 +41,6 @@ n = len(mmsis)
 train_mmsi = set(mmsis[:int(0.70*n)])
 val_mmsi   = set(mmsis[int(0.70*n):int(0.85*n)])
 test_mmsi  = set(mmsis[int(0.85*n):])
-
-""" print(f"Train {len(train_mmsi)} | Val {len(val_mmsi)} | Test {len(test_mmsi)}")
-print("All sample weights:")
-print(df["sample_weight"].value_counts())
-
-print("Labeled y distribution:")
-print(df[df["sample_weight"] == 1]["y_train"].value_counts())
-
-print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
-print(df[FEATURES].abs().max().sort_values(ascending=False)) """
 
 # Fit normalization on TRAIN ONLY
 sum_x = pd.Series(0.0, index=FEATURES)
@@ -78,7 +68,7 @@ mu = sum_x / count
 sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
 print("mu and sigma found")
 
-with open("parameters_full2023.pkl", "wb") as f:
+with open("tuning/parameters_2024_optuna.pkl", "wb") as f:
     pickle.dump({"mu": mu, "sigma": sigma}, f)
 
 
@@ -154,7 +144,7 @@ class AISWindowDataset(IterableDataset):
 
 
 class FishingBiLSTM(nn.Module):
-    def __init__(self, n_features, hidden=128, n_layers=2, dropout=0.3):
+    def __init__(self, n_features, hidden=128, n_layers=2, dropout=0.3, dense=64):
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=n_features,
@@ -165,10 +155,10 @@ class FishingBiLSTM(nn.Module):
             dropout=dropout if n_layers > 1 else 0.0,
         )
         self.head = nn.Sequential(
-            nn.Linear(2 * hidden, 64),
+            nn.Linear(2 * hidden, dense),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(64, 1),   # binary logit per timestep
+            nn.Linear(dense, 1),   # binary logit per timestep
         )
 
     def forward(self, x):
@@ -203,24 +193,14 @@ else:
     device = torch.device("cpu")
 
 # ------------------------------------------------------------------
-# Re-instantiate before training (prevents stale state on cell re-run)
+# Class imbalance (computed once, shared across trials)
 # ------------------------------------------------------------------
-
-torch.manual_seed(42)
-
-model = FishingBiLSTM(n_features=len(FEATURES),
-                      hidden=128, n_layers=2, dropout=0.3).to(device)
-
-neg = 0
-pos = 0
-
+neg, pos = 0, 0
 cols = ["mmsi", "sample_weight", "y_train"]
-
 for f in files:
     df_tmp = pd.read_parquet(f, columns=cols)
-    df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsi)].copy()
+    df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsi)]
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
-
     neg += (df_tmp["y_train"] == 0).sum()
     pos += (df_tmp["y_train"] == 1).sum()
 
@@ -234,15 +214,32 @@ def masked_loss(logits, y, mask):
     per = bce(logits, y)
     return (per * m).sum() / m.sum().clamp_min(1.0)
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, mode="min", factor=0.5, patience=2)
+# ------------------------------------------------------------------
+# Generic epoch runner (no globals)
+# ------------------------------------------------------------------
 
-# ------------------------------------------------------------------
-# Epoch runner — per-message metrics (padding ignored), NaN-safe
-# ------------------------------------------------------------------
-print("Starting epochs")
-def run_epoch(loader, train: bool):
+def cache_windows(mmsi_set, name, window, stride):
+    out_path = Path(f"tuning/cache_{name}_w{window}_s{stride}.pt")
+    if out_path.exists():
+        print(f"  already cached: {out_path.name}")
+        return
+    print(f"  caching {out_path.name} ...")
+    ds = AISWindowDataset(files, mmsi_set, FEATURES, mu, sigma,
+                          window=window, stride=stride)
+    xs, ys, ms = [], [], []
+    for x, y, m in ds:
+        xs.append(x); ys.append(y); ms.append(m)
+    torch.save({"x": torch.stack(xs),
+                "y": torch.stack(ys),
+                "m": torch.stack(ms)}, out_path)
+
+print("Building caches...")
+for w, s in [(128, 64), (128, 128), (256, 64), (256, 128)]:
+    cache_windows(train_mmsi, "train", w, s)
+    cache_windows(val_mmsi,   "val",   w, s)
+print("Caches ready.\n")
+
+def run_epoch(model, loader, optimizer, device, train: bool):
     model.train() if train else model.eval()
     tot_loss, tot_n = 0.0, 0
     tp = fp = fn = tn = 0
@@ -257,7 +254,6 @@ def run_epoch(loader, train: bool):
             loss = masked_loss(logits, y, m)
 
             if train:
-                # Guard: skip any bad step instead of poisoning weights
                 if not torch.isfinite(loss):
                     optimizer.zero_grad()
                     continue
@@ -268,7 +264,7 @@ def run_epoch(loader, train: bool):
 
             n = m.sum().item()
             tot_loss += loss.item() * n
-            tot_n    += n
+            tot_n += n
 
             pred = (torch.sigmoid(logits) > 0.5).int()
             yi, mb = y.int(), m.bool()
@@ -285,27 +281,107 @@ def run_epoch(loader, train: bool):
     return avg, prec, rec, f1, acc
 
 # ------------------------------------------------------------------
-# Train
+# Train one hyperparameter config (with Optuna pruning support)
+# ------------------------------------------------------------------
+def train_one_config(cfg, trial=None, max_epochs=6):
+    torch.manual_seed(42)
+
+    # Load cached windows instead of re-reading parquet
+    train_cache = torch.load(f"tuning/cache_train_w{cfg['window']}_s{cfg['stride']}.pt")
+    val_cache   = torch.load(f"tuning/cache_val_w{cfg['window']}_s{cfg['stride']}.pt")
+
+    train_ds = TensorDataset(train_cache["x"], train_cache["y"], train_cache["m"])
+    val_ds   = TensorDataset(val_cache["x"],   val_cache["y"],   val_cache["m"])
+
+    train_loader = DataLoader(train_ds, batch_size=cfg["batch"], shuffle=True,
+                              num_workers=0, drop_last=True,
+                              pin_memory=torch.cuda.is_available())
+    val_loader   = DataLoader(val_ds, batch_size=cfg["batch"], num_workers=0)
+
+    model = FishingBiLSTM(
+        n_features=len(FEATURES),
+        hidden=cfg["hidden"],
+        n_layers=cfg["n_layers"],
+        dropout=cfg["dropout"],
+        dense=cfg["dense"],
+    ).to(device)
+
+    optimizer = torch.optim.AdamW(model.parameters(),
+                                  lr=cfg["lr"], weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=1)
+
+    best = {"val_loss": float("inf"), "val_f1": 0.0, "epoch": -1}
+    bad, patience = 0, 2
+
+    for ep in range(1, max_epochs + 1):
+        tr = run_epoch(model, train_loader, optimizer, device, train=True)
+        vl = run_epoch(model, val_loader,   optimizer, device, train=False)
+        scheduler.step(vl[0])
+
+        print(f"  ep{ep} train_loss {tr[0]:.4f} | "
+              f"val_loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f}")
+
+        if vl[0] < best["val_loss"]:
+            best = {"val_loss": vl[0], "val_f1": vl[3],
+                    "val_p": vl[1], "val_r": vl[2], "epoch": ep}
+            bad = 0
+        else:
+            bad += 1
+            if bad >= patience:
+                break
+
+        # Optuna pruning: report and possibly stop early
+        if trial is not None:
+            trial.report(vl[0], ep)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
+    return best
+
+# ------------------------------------------------------------------
+# Optuna objective
+# ------------------------------------------------------------------
+def objective(trial):
+    cfg = {
+        "hidden":   trial.suggest_categorical("hidden", [64, 128, 256]),
+        "n_layers": trial.suggest_int("n_layers", 1, 3),
+        "dropout":  trial.suggest_float("dropout", 0.1, 0.5),
+        "batch":    trial.suggest_categorical("batch", [64, 128, 256]),
+        "lr":       trial.suggest_float("lr", 1e-5, 1e-3, log=True),
+        #"wd":       trial.suggest_float("wd", 1e-6, 1e-3, log=True),
+        "window":   trial.suggest_categorical("window", [128, 256]),
+        "stride":   trial.suggest_categorical("stride", [64, 128]),
+        "dense":    trial.suggest_categorical("dense", [32, 64, 128]),
+    }
+    # Guard against silly combos
+    if cfg["stride"] > cfg["window"] // 2:
+        raise optuna.TrialPruned()
+
+    print(f"\nTrial {trial.number}: {cfg}")
+    best = train_one_config(cfg, trial=trial, max_epochs=6)
+    return best["val_loss"]
+
+# ------------------------------------------------------------------
+# Run the study
 # ------------------------------------------------------------------
 
-model_name = "model_full_2023_256.pt"
+study = optuna.create_study(
+    direction="minimize",
+    study_name="fishing_bilstm_search",
+    storage="sqlite:///tuning/optuna_fishing.db",   # so you can resume / inspect
+    load_if_exists=True,
+    pruner=optuna.pruners.MedianPruner(n_warmup_steps=2, n_startup_trials=5),
+    sampler=optuna.samplers.TPESampler(seed=42),
+)
 
-best_val = float("inf")
-for epoch in range(1, 15):
-    tr = run_epoch(train_loader, train=True)
-    vl = run_epoch(val_loader,   train=False)
-    scheduler.step(vl[0])
-    print(f"Ep{epoch:02d} | train loss {tr[0]:.4f} f1 {tr[3]:.3f} | "
-          f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f} acc {vl[4]:.3f}")
-    if vl[0] < best_val:
-        best_val = vl[0]
-        torch.save(model.state_dict(), model_name)
+study.optimize(objective, n_trials=2, show_progress_bar=False)
 
-# ------------------------------------------------------------------
-# Final test
-# ------------------------------------------------------------------
-import os
-if os.path.exists(model_name):
-    model.load_state_dict(torch.load(model_name))
-te = run_epoch(test_loader, train=False)
-print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")
+print("\n=== BEST ===")
+print("val_loss:", study.best_value)
+print("params:  ", study.best_params)
+
+# Persist best params to use later when scaling up
+with open("tuning/best_params.json", "w") as f:
+    json.dump({"best_value": study.best_value,
+               "best_params": study.best_params}, f, indent=2)
