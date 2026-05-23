@@ -7,7 +7,7 @@ import geopandas as gpd
 import contextily as ctx
 from shapely.geometry import box
 
-df = pd.read_parquet("7_9_predictions_bilstm_w_dist_256window.parquet")
+df = pd.read_parquet("pred_1_3_2024_w_full_2023_model_256.parquet")
 print(df.columns)
 print(df["report"].unique())
 
