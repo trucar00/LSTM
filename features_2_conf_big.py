@@ -187,16 +187,16 @@ def concat():
             all_gear_full_month_df.to_parquet(f"three_months/all_gear/{year}_{i}_{i+2}.parquet", index=False)
 
 def main():
-    for year in range(2022, 2024+1):
+    for year in range(2023, 2024+1):
         for i in range(1, 12+1, 3):
-            df = pd.read_parquet(f"three_months/{year}_{i}_{i+2}.parquet", engine="pyarrow")
+            df = pd.read_parquet(f"three_months/all_gear/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
             df = add_features(df)
             check_feats(df)
-            df.to_parquet(f"three_months/feats_w_report/{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/feats_all_gear/{year}_{i}_{i+2}_feats.parquet", index=False)
 
 
 if __name__ == "__main__":
-    #main()
-    concat()
+    main()
+    #concat()
