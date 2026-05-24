@@ -42,6 +42,16 @@ train_mmsi = set(mmsis[:int(0.70*n)])
 val_mmsi   = set(mmsis[int(0.70*n):int(0.85*n)])
 test_mmsi  = set(mmsis[int(0.85*n):])
 
+
+mu_sigma_path = Path(f"tuning/parameters_2024_optuna.pkl")
+if mu_sigma_path.exists():
+    with open("parameters_full2023.pkl", "rb") as f:
+        params = pickle.load(f)
+
+    mu = params["mu"]
+    sigma = params["sigma"]
+    
+print("Read mu and sigma from file")
 # Fit normalization on TRAIN ONLY
 sum_x = pd.Series(0.0, index=FEATURES)
 sum_x2 = pd.Series(0.0, index=FEATURES)
