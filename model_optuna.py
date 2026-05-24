@@ -45,41 +45,43 @@ test_mmsi  = set(mmsis[int(0.85*n):])
 
 mu_sigma_path = Path(f"tuning/parameters_2024_optuna.pkl")
 if mu_sigma_path.exists():
-    with open("parameters_full2023.pkl", "rb") as f:
+    print(f"Loading mu/sigma from {mu_sigma_path}")
+    with open(mu_sigma_path, "rb") as f:
         params = pickle.load(f)
 
     mu = params["mu"]
     sigma = params["sigma"]
-    
-print("Read mu and sigma from file")
-# Fit normalization on TRAIN ONLY
-sum_x = pd.Series(0.0, index=FEATURES)
-sum_x2 = pd.Series(0.0, index=FEATURES)
-count = 0
 
-needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
+else:
+    # Fit normalization on TRAIN ONLY
+    sum_x = pd.Series(0.0, index=FEATURES)
+    sum_x2 = pd.Series(0.0, index=FEATURES)
+    count = 0
 
-for f in files:
-    df = pd.read_parquet(f, columns=needed_cols)
-    df = df[df["mmsi"].isin(train_mmsi)].copy()
+    needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
 
-    df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
-    month = df["date_time_utc"].dt.month
+    for f in files:
+        df = pd.read_parquet(f, columns=needed_cols)
+        df = df[df["mmsi"].isin(train_mmsi)].copy()
 
-    df["month_sin"] = np.sin(2 * np.pi * month / 12)
-    df["month_cos"] = np.cos(2 * np.pi * month / 12)
+        df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
+        month = df["date_time_utc"].dt.month
 
-    x = df[FEATURES]
-    sum_x += x.sum()
-    sum_x2 += (x ** 2).sum()
-    count += len(x)
+        df["month_sin"] = np.sin(2 * np.pi * month / 12)
+        df["month_cos"] = np.cos(2 * np.pi * month / 12)
 
-mu = sum_x / count
-sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
-print("mu and sigma found")
+        x = df[FEATURES]
+        sum_x += x.sum()
+        sum_x2 += (x ** 2).sum()
+        count += len(x)
 
-with open("tuning/parameters_2024_optuna.pkl", "wb") as f:
-    pickle.dump({"mu": mu, "sigma": sigma}, f)
+    mu = sum_x / count
+    sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
+    print("Mu and sigma found")
+
+    with open(mu_sigma_path, "wb") as f:
+        pickle.dump({"mu": mu, "sigma": sigma}, f)
+    print(f"Saved mu/sigma to {mu_sigma_path}")
 
 
 class AISWindowDataset(IterableDataset):
@@ -150,7 +152,6 @@ class AISWindowDataset(IterableDataset):
 
             for _, traj in df.groupby("trajectory_id", sort=False):
                 yield from self.make_windows(traj)
-
 
 
 class FishingBiLSTM(nn.Module):
@@ -385,7 +386,7 @@ study = optuna.create_study(
     sampler=optuna.samplers.TPESampler(seed=42),
 )
 
-study.optimize(objective, n_trials=40, show_progress_bar=False)
+study.optimize(objective, n_trials=10, show_progress_bar=False)
 
 print("\n=== BEST ===")
 print("val_loss:", study.best_value)
