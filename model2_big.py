@@ -5,10 +5,41 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, IterableDataset
 import os
 import pickle
-import glob
+import json
+from pathlib import Path
 
-WINDOW = 256
-STRIDE = 128
+
+# Setting of parameters
+
+USE_TUNED_PARAMS = True
+tuned_params_path = Path(f"tuning/best_params.json")
+
+if USE_TUNED_PARAMS and tuned_params_path.exists():
+    
+    with open(tuned_params_path, "r") as file:
+        best_params = json.load(file)["best_params"]
+    print("Loaded tuned params ", best_params)
+    WINDOW = best_params["window"]
+    STRIDE = best_params["stride"]
+    N_LAYERS = best_params["n_layers"]
+    HIDDEN = best_params["hidden"]
+    DENSE = best_params["dense"]
+    DROPOUT = best_params["dropout"]
+    BATCH = best_params["batch"]
+    LR = best_params["lr"]
+
+# Previous base parameters
+else:
+    print("Using default (non-tuned) params")
+    WINDOW = 256
+    STRIDE = 128
+    HIDDEN = 128
+    DROPOUT = 0.3
+    N_LAYERS = 2
+    DENSE = 64
+    BATCH = 128
+    LR = 1e-4
+
 
 #files = sorted(glob.glob("three_months/feats/*.parquet"))
 
@@ -42,49 +73,50 @@ train_mmsi = set(mmsis[:int(0.70*n)])
 val_mmsi   = set(mmsis[int(0.70*n):int(0.85*n)])
 test_mmsi  = set(mmsis[int(0.85*n):])
 
-""" print(f"Train {len(train_mmsi)} | Val {len(val_mmsi)} | Test {len(test_mmsi)}")
-print("All sample weights:")
-print(df["sample_weight"].value_counts())
+mu_sigma_path = Path(f"parameters_full2023.pkl")
+if mu_sigma_path.exists():
+    print(f"Loading mu/sigma from {mu_sigma_path}")
+    with open(mu_sigma_path, "rb") as f:
+        params = pickle.load(f)
 
-print("Labeled y distribution:")
-print(df[df["sample_weight"] == 1]["y_train"].value_counts())
+    mu = params["mu"]
+    sigma = params["sigma"]
 
-print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
-print(df[FEATURES].abs().max().sort_values(ascending=False)) """
+else:
 
-# Fit normalization on TRAIN ONLY
-sum_x = pd.Series(0.0, index=FEATURES)
-sum_x2 = pd.Series(0.0, index=FEATURES)
-count = 0
+    # Fit normalization on TRAIN ONLY
+    sum_x = pd.Series(0.0, index=FEATURES)
+    sum_x2 = pd.Series(0.0, index=FEATURES)
+    count = 0
 
-needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
+    needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
 
-for f in files:
-    df = pd.read_parquet(f, columns=needed_cols)
-    df = df[df["mmsi"].isin(train_mmsi)].copy()
+    for f in files:
+        df = pd.read_parquet(f, columns=needed_cols)
+        df = df[df["mmsi"].isin(train_mmsi)].copy()
 
-    df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
-    month = df["date_time_utc"].dt.month
+        df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
+        month = df["date_time_utc"].dt.month
 
-    df["month_sin"] = np.sin(2 * np.pi * month / 12)
-    df["month_cos"] = np.cos(2 * np.pi * month / 12)
+        df["month_sin"] = np.sin(2 * np.pi * month / 12)
+        df["month_cos"] = np.cos(2 * np.pi * month / 12)
 
-    x = df[FEATURES]
-    sum_x += x.sum()
-    sum_x2 += (x ** 2).sum()
-    count += len(x)
+        x = df[FEATURES]
+        sum_x += x.sum()
+        sum_x2 += (x ** 2).sum()
+        count += len(x)
 
-mu = sum_x / count
-sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
-print("mu and sigma found")
+    mu = sum_x / count
+    sigma = np.sqrt((sum_x2 / count) - mu**2).replace(0, 1)
+    print("mu and sigma found")
 
-with open("parameters_full2023.pkl", "wb") as f:
-    pickle.dump({"mu": mu, "sigma": sigma}, f)
+    with open(mu_sigma_path, "wb") as f:
+        pickle.dump({"mu": mu, "sigma": sigma}, f)
 
 
 class AISWindowDataset(IterableDataset):
     def __init__(self, files, mmsi_set, features, mu, sigma,
-                 window=128, stride=64, shuffle_files=False):
+                 window=WINDOW, stride=STRIDE, shuffle_files=False):
         self.files = files
         self.mmsi_set = mmsi_set
         self.features = features
@@ -132,7 +164,6 @@ class AISWindowDataset(IterableDataset):
             if len(df) == 0:
                 continue
             
-
             df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
 
             month = df["date_time_utc"].dt.month
@@ -154,7 +185,7 @@ class AISWindowDataset(IterableDataset):
 
 
 class FishingBiLSTM(nn.Module):
-    def __init__(self, n_features, hidden=128, n_layers=2, dropout=0.3):
+    def __init__(self, n_features, hidden=HIDDEN, n_layers=N_LAYERS, dropout=DROPOUT, dense=DENSE):
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=n_features,
@@ -165,10 +196,10 @@ class FishingBiLSTM(nn.Module):
             dropout=dropout if n_layers > 1 else 0.0,
         )
         self.head = nn.Sequential(
-            nn.Linear(2 * hidden, 64),
+            nn.Linear(2 * hidden, dense),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(64, 1),   # binary logit per timestep
+            nn.Linear(dense, 1),   # binary logit per timestep
         )
 
     def forward(self, x):
@@ -177,8 +208,6 @@ class FishingBiLSTM(nn.Module):
         logits = self.head(h).squeeze(-1)  # (B, T)
         return logits
 
-
-BATCH = 128
 train_ds = AISWindowDataset(files, train_mmsi, FEATURES, mu, sigma, shuffle_files=True, stride=STRIDE, window=WINDOW)
 val_ds   = AISWindowDataset(files, val_mmsi, FEATURES, mu, sigma, stride=STRIDE, window=WINDOW)
 test_ds  = AISWindowDataset(files, test_mmsi, FEATURES, mu, sigma, stride=STRIDE, window=WINDOW)
@@ -209,7 +238,7 @@ else:
 torch.manual_seed(42)
 
 model = FishingBiLSTM(n_features=len(FEATURES),
-                      hidden=128, n_layers=2, dropout=0.3).to(device)
+                      hidden=HIDDEN, n_layers=N_LAYERS, dropout=DROPOUT, dense=DENSE).to(device)
 
 neg = 0
 pos = 0
@@ -234,7 +263,7 @@ def masked_loss(logits, y, mask):
     per = bce(logits, y)
     return (per * m).sum() / m.sum().clamp_min(1.0)
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
+optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer, mode="min", factor=0.5, patience=2)
 
@@ -288,18 +317,34 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 
-model_name = "model_full_2023_256.pt"
+model_name = "models/model_full_tuned_2023.pt"
 
 best_val = float("inf")
-for epoch in range(1, 15):
+bad, patience = 0, 3
+
+history = []
+for epoch in range(1, 16):
     tr = run_epoch(train_loader, train=True)
     vl = run_epoch(val_loader,   train=False)
     scheduler.step(vl[0])
     print(f"Ep{epoch:02d} | train loss {tr[0]:.4f} f1 {tr[3]:.3f} | "
-          f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f} acc {vl[4]:.3f}")
+          f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f}")
+    history.append({
+        "epoch": epoch,
+        "train_loss": tr[0], "train_f1": tr[3],
+        "val_loss": vl[0],   "val_p": vl[1], "val_r": vl[2],
+        "val_f1": vl[3],     "val_acc": vl[4],
+    })
+    pd.DataFrame(history).to_csv("training_stats/training_history_tuned.csv", index=False)
     if vl[0] < best_val:
         best_val = vl[0]
         torch.save(model.state_dict(), model_name)
+        bad = 0
+    else:
+        bad += 1
+        if bad >= patience:
+            print(f"Early stopping at epoch {epoch}")
+            break
 
 # ------------------------------------------------------------------
 # Final test
@@ -309,3 +354,7 @@ if os.path.exists(model_name):
     model.load_state_dict(torch.load(model_name))
 te = run_epoch(test_loader, train=False)
 print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")
+
+with open("training_stats/results_tuned_model_full2023.json", "w") as f:
+    json.dump({"loss": te[0], "precision": te[1], "recall": te[2],
+               "f1": te[3], "accuracy": te[4], "params": best_params}, f, indent=2)
