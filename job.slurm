@@ -6,7 +6,7 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=80G             # GB memory
-#SBATCH --output=tuning/output_optuna_%j.txt    # Log file
+#SBATCH --output=models/output_full_tuned_2023_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
