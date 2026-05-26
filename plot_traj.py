@@ -7,7 +7,7 @@ import geopandas as gpd
 import contextily as ctx
 from shapely.geometry import box
 
-df = pd.read_parquet("pred_1_3_2024_w_full_2023_model_256.parquet")
+df = pd.read_parquet("2025_1_3_w_full_2023_2024_model_tuned.parquet")
 print(df.columns)
 print(df["report"].unique())
 
@@ -75,7 +75,7 @@ traj_ids = df["mmsi"].unique()
 rng = np.random.default_rng(42)
 sampled_traj_ids = rng.choice(
     traj_ids,
-    size=int(0.1 * len(traj_ids)),
+    size=int(0.05 * len(traj_ids)),
     replace=False
 )
 
@@ -298,4 +298,4 @@ def heatmap(df):
     ax.set_axis_off()
     plt.show()
 
-heatmap(df)
+heatmap(df_sample)
