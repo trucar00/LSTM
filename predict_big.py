@@ -89,7 +89,7 @@ print("Read mu and sigma from file")
 # If not built yet: run df_predict = add_features(raw_may_df)
 # --------------------------------------------------
 
-df_predict = pd.read_parquet("three_months/feats_all_gear2/2025_7_9_feats.parquet")
+df_predict = pd.read_parquet("three_months/feats_all_gear2/2025_10_12_feats.parquet")
 df_predict["date_time_utc"] = pd.to_datetime(df_predict["date_time_utc"])
 month = df_predict["date_time_utc"].dt.month
 
@@ -172,7 +172,7 @@ df_predict["pred_fishing"] = (df_predict["p_fishing"] > 0.5).astype(int)
 
 df_predict = df_predict.drop(columns=["pred_sum", "pred_count"])
 
-df_predict.to_parquet("predictions/2025_7_9_w_full_2023_2024_model_tuned.parquet", index=False)
+df_predict.to_parquet("predictions/2025_10_12_w_full_2023_2024_model_tuned.parquet", index=False)
 
 print(df_predict[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
 print(df_predict["pred_fishing"].value_counts())
