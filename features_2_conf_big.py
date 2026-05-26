@@ -35,6 +35,7 @@ GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps"]
 
 
 def column_fixing(df):
+    df["gear_report"] = df["report"]
     df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
     df.loc[df["unknown_no_fishing"], "report"] = "unknown"
 
@@ -44,8 +45,6 @@ def column_fixing(df):
     print(counts)
 
     # Include all fishing as FISHING
-
-    df["gear_report"] = df["report"]
    
     for gear in GEAR:
         df.loc[df["report"] == gear, "report"] = "fishing"
@@ -187,16 +186,16 @@ def concat():
             all_gear_full_month_df.to_parquet(f"three_months/all_gear2/{year}_{i}_{i+2}.parquet", index=False)
 
 def main():
-    for year in range(2023, 2024+1):
+    for year in range(2023, 2025+1):
         for i in range(1, 12+1, 3):
-            df = pd.read_parquet(f"three_months/all_gear/{year}_{i}_{i+2}.parquet", engine="pyarrow")
+            df = pd.read_parquet(f"three_months/all_gear2/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
             df = add_features(df)
             check_feats(df)
-            df.to_parquet(f"three_months/feats_all_gear/{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/feats_all_gear2/{year}_{i}_{i+2}_feats.parquet", index=False)
 
 
 if __name__ == "__main__":
-    #main()
-    concat()
+    main()
+    #concat()
