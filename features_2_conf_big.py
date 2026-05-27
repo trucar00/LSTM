@@ -189,7 +189,7 @@ def concat2():
     for i in range(1, 12+1, 3):
         dfs = []
         for j in range(i, i+3):
-            df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/ais_ers_labels_all_{j:02d}_2025.parquet", engine="pyarrow")
+            df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/all_vessels_2025_w_labels/ais_ers_labels_all_{j:02d}_2025.parquet", engine="pyarrow")
             dfs.append(df)
 
         all_vessels_three_months = pd.concat(dfs, ignore_index=True)
