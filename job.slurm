@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=GPUQ
-#SBATCH --gres=gpu:1
+#SBATCH --partition=CPUQ
+##SBATCH --gres=gpu:1
 #SBATCH --time=2:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=64G             # GB memory
-#SBATCH --output=predictions/output_predict_2025_10_12_model_full_gear2_tuned_2023_2024_%j.txt    # Log file
+#SBATCH --mem=128G             # GB memory
+#SBATCH --output=three_months/all_vessels_2025/output_concat_all_vessels_2025_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -36,4 +36,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u predict_big.py
+python -u features_2_conf_big.py

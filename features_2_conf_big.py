@@ -185,6 +185,16 @@ def concat():
             all_gear_full_month_df = pd.concat(dfs, ignore_index=True)
             all_gear_full_month_df.to_parquet(f"three_months/all_gear2/{year}_{i}_{i+2}.parquet", index=False)
 
+def concat2():
+    for i in range(1, 12+1, 3):
+        dfs = []
+        for j in range(i, i+3):
+            df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/ais_ers_labels_all_{j}_2025.parquet", engine="pyarrow")
+            dfs.append(df)
+
+        all_vessels_three_months = pd.concat(dfs, ignore_index=True)
+        all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}.parquet", index=False)
+
 def main():
     for year in range(2023, 2025+1):
         for i in range(1, 12+1, 3):
@@ -197,5 +207,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    #main()
     #concat()
+    concat2()
