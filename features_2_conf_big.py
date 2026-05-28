@@ -39,7 +39,7 @@ def column_fixing(df):
     #df.loc[df["conf_no_fishing"], "label"] = "conf_no_fishing"
     #df.loc[df["unknown_no_fishing"], "label"] = "unknown"
 
-    df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
+    df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"], errors="ignore")
 
     counts = df["label"].value_counts()
     print(counts)
