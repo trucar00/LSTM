@@ -9,14 +9,14 @@ import json
 from pathlib import Path
 
 files = [
-    "three_months/feats_all_gear2/2023_1_3_feats.parquet",
-    "three_months/feats_all_gear2/2023_4_6_feats.parquet",
-    "three_months/feats_all_gear2/2023_7_9_feats.parquet",
-    "three_months/feats_all_gear2/2023_10_12_feats.parquet",
+    #"three_months/feats_all_gear2/2023_1_3_feats.parquet",
+    #"three_months/feats_all_gear2/2023_4_6_feats.parquet",
+    #"three_months/feats_all_gear2/2023_7_9_feats.parquet",
+    #"three_months/feats_all_gear2/2023_10_12_feats.parquet",
     "three_months/feats_all_gear2/2024_1_3_feats.parquet",
     "three_months/feats_all_gear2/2024_4_6_feats.parquet",
-    "three_months/feats_all_gear2/2024_7_9_feats.parquet",
-    "three_months/feats_all_gear2/2024_10_12_feats.parquet"
+    #"three_months/feats_all_gear2/2024_7_9_feats.parquet",
+    #"three_months/feats_all_gear2/2024_10_12_feats.parquet"
 ]
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
@@ -42,7 +42,7 @@ train_mmsi = set(mmsis[:int(0.70*n)])
 val_mmsi   = set(mmsis[int(0.70*n):int(0.85*n)])
 test_mmsi  = set(mmsis[int(0.85*n):])
 
-mu_sigma_path = Path(f"parameters_full_all_gear2_2023_2024.pkl")
+mu_sigma_path = Path(f"parameters_2024_1_3_4_6.pkl")
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
