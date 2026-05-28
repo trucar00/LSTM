@@ -87,13 +87,13 @@ def add_features(df):
     df["cog_cos"] = np.cos(np.radians(df["cog"]))
 
     # Binary label
-    df["y"] = np.nan
-    df.loc[df["label"] == "fishing", "y"] = 1
-    df.loc[df["label"] == "conf_no_fishing", "y"] = 0
+    #df["y"] = np.nan
+    #df.loc[df["label"] == "fishing", "y"] = 1
+    #df.loc[df["label"] == "conf_no_fishing", "y"] = 0
     
     # Sample weight, unknown = 0
-    df["sample_weight"] = df["y"].notna().astype(np.float32)
-    df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
+    #df["sample_weight"] = df["y"].notna().astype(np.float32)
+    #df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
 
     # Calculated speed in m/s
     df["speed_calc_ms"] = df["dist_to_prev"] / df["dt"]
