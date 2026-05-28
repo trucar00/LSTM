@@ -77,7 +77,7 @@ train_mmsi = set(mmsis[:int(0.70*n)])
 val_mmsi   = set(mmsis[int(0.70*n):int(0.85*n)])
 test_mmsi  = set(mmsis[int(0.85*n):])
 
-mu_sigma_path = Path(f"parameters2023_2024.pkl") # USE CORRECT PARAMETERS
+mu_sigma_path = Path(f"parameters_2024_1_3_4_6.pkl") # USE CORRECT PARAMETERS
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
@@ -321,7 +321,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 
-model_name = "models/model_full_all_gear2_tuned_2023_2024.pt"
+model_name = "models/model_tuned_2024_1_3_4_6.pt"
 
 best_val = float("inf")
 bad, patience = 0, 3
@@ -339,7 +339,7 @@ for epoch in range(1, 16):
         "val_loss": vl[0],   "val_p": vl[1], "val_r": vl[2],
         "val_f1": vl[3],     "val_acc": vl[4],
     })
-    pd.DataFrame(history).to_csv("training_stats/training_history_tuned_full_all_gear2_2023_2024.csv", index=False)
+    pd.DataFrame(history).to_csv("training_stats/training_history_tuned_2024_1_3_4_6.csv", index=False)
     if vl[0] < best_val:
         best_val = vl[0]
         torch.save(model.state_dict(), model_name)
@@ -359,6 +359,6 @@ if os.path.exists(model_name):
 te = run_epoch(test_loader, train=False)
 print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")
 
-with open("training_stats/results_tuned_model_full_all_gear2_2023_2024.json", "w") as f:
+with open("training_stats/results_tuned_2024_1_3_4_6.json", "w") as f:
     json.dump({"loss": te[0], "precision": te[1], "recall": te[2],
                "f1": te[3], "accuracy": te[4], "params": best_params}, f, indent=2)
