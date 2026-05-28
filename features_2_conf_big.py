@@ -2,6 +2,7 @@ import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+import gc
 
 # -- HELPER FUNCTIONS --
 def haversine(lat1, lon1, lat2, lon2):
@@ -205,6 +206,8 @@ def main():
             check_feats(df)
             df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
 
+            del df
+            gc.collect()
 
 if __name__ == "__main__":
     main()
