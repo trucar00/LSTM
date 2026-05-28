@@ -5,7 +5,7 @@
 #SBATCH --time=3:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=100G             # GB memory
+#SBATCH --mem=230G             # GB memory
 #SBATCH --output=three_months/all_vessels_2025/output_feats_all_vessels_2025_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
