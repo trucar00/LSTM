@@ -35,21 +35,21 @@ GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps"]
 
 
 def column_fixing(df):
-    df["gear_report"] = df["report"]
-    df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
-    df.loc[df["unknown_no_fishing"], "report"] = "unknown"
+    df["gear_report"] = df["label"]
+    df.loc[df["conf_no_fishing"], "label"] = "conf_no_fishing"
+    df.loc[df["unknown_no_fishing"], "label"] = "unknown"
 
     df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
 
-    counts = df["report"].value_counts()
+    counts = df["label"].value_counts()
     print(counts)
 
     # Include all fishing as FISHING
    
     for gear in GEAR:
-        df.loc[df["report"] == gear, "report"] = "fishing"
+        df.loc[df["label"] == gear, "label"] = "fishing"
 
-    print(df["report"].unique())
+    print(df["label"].unique())
     return df
 
 # Build features
@@ -88,8 +88,8 @@ def add_features(df):
 
     # Binary label
     df["y"] = np.nan
-    df.loc[df["report"] == "fishing", "y"] = 1
-    df.loc[df["report"] == "conf_no_fishing", "y"] = 0
+    df.loc[df["label"] == "fishing", "y"] = 1
+    df.loc[df["label"] == "conf_no_fishing", "y"] = 0
     
     # Sample weight, unknown = 0
     df["sample_weight"] = df["y"].notna().astype(np.float32)
@@ -134,8 +134,8 @@ def add_features(df):
 #df = add_features(df)
 
 def check_feats(df):
-    counts = df["report"].value_counts().reset_index()
-    counts.columns = ["report", "nr_messages"]
+    counts = df["label"].value_counts().reset_index()
+    counts.columns = ["label", "nr_messages"]
     print(counts)
 
     print(df[FEATURES].isna().sum())
