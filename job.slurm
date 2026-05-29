@@ -2,11 +2,11 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=1:30:00
+#SBATCH --time=00:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=64G             # GB memory
-#SBATCH --output=predictions/output_predict_2024_1_3_4_6%j.txt    # Log file
+#SBATCH --mem=8G             # GB memory
+#SBATCH --output=other_preds/russian_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

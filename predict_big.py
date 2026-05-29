@@ -42,7 +42,7 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-MODEL_PATH = "models/model_tuned_2024_1_3_4_6.pt"
+MODEL_PATH = "models/model_full_all_gear2_tuned_2023_2024.pt"
 
 # --------------------------------------------------
 # Same model class as training
@@ -77,7 +77,7 @@ class FishingBiLSTM(nn.Module):
 # --------------------------------------------------
 
 
-with open("parameters_2024_1_3_4_6.pkl", "rb") as f:
+with open("parameters_full_all_gear2_2023_2024.pkl", "rb") as f:
     params = pickle.load(f)
 
 mu = params["mu"]
@@ -89,7 +89,8 @@ print("Read mu and sigma from file")
 # If not built yet: run df_predict = add_features(raw_may_df)
 # --------------------------------------------------
 
-df_predict = pd.read_parquet("three_months/feats_all_gear2/2025_1_3_feats.parquet")
+#df_predict = pd.read_parquet("three_months/feats_all_gear2/2025_1_3_feats.parquet")
+df_predict = pd.read_parquet("other_preds/russian_trawler_feats.parquet")
 df_predict["date_time_utc"] = pd.to_datetime(df_predict["date_time_utc"])
 month = df_predict["date_time_utc"].dt.month
 
@@ -172,7 +173,7 @@ df_predict["pred_fishing"] = (df_predict["p_fishing"] > 0.5).astype(int)
 
 df_predict = df_predict.drop(columns=["pred_sum", "pred_count"])
 
-df_predict.to_parquet("predictions/2025_1_3_w_2024_1_3_4_6_model_tuned.parquet", index=False)
+df_predict.to_parquet("other_preds/russian_trawler_pred.parquet", index=False)
 
 print(df_predict[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
 print(df_predict["pred_fishing"].value_counts())

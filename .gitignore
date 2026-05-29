@@ -2,3 +2,4 @@
 *.pt
 *.parquet
 *.pkl
+Data/
