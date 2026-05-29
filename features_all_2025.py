@@ -2,6 +2,8 @@ import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+import gc
+import rasterio
 
 # -- HELPER FUNCTIONS --
 def haversine(lat1, lon1, lat2, lon2):
@@ -35,24 +37,74 @@ GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps"]
 
 
 def column_fixing(df):
-    df["gear_report"] = df["report"]
-    df.loc[df["conf_no_fishing"], "report"] = "conf_no_fishing"
-    df.loc[df["unknown_no_fishing"], "report"] = "unknown"
+    df["gear_report"] = df["label"]
+    #df.loc[df["conf_no_fishing"], "label"] = "conf_no_fishing"
+    #df.loc[df["unknown_no_fishing"], "label"] = "unknown"
 
-    df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"])
+    df = df.drop(columns=["row_id", "high_speed", "no_fish_cl", "close_to_shore", "passed_any_rule", "conf_no_fishing", "unknown_no_fishing"], errors="ignore")
 
-    counts = df["report"].value_counts()
+    counts = df["label"].value_counts()
     print(counts)
 
     # Include all fishing as FISHING
    
     for gear in GEAR:
-        df.loc[df["report"] == gear, "report"] = "fishing"
+        df.loc[df["label"] == gear, "label"] = "fishing"
 
-    print(df["report"].unique())
+    print(df["label"].unique())
     return df
 
 # Build features
+
+def close_to_shore(df, threshold_km, raster_path="../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/distance-from-shore.tif"):
+    print(f"Checking distance to shore. Shore threshold: {threshold_km}")
+    df = df.copy()
+    print("Rounding coordinates...")
+    df["lon_r"] = df["lon"].round(4)
+    df["lat_r"] = df["lat"].round(4)
+
+    print("Finding unique coordinates...")
+    unique_pts = df[["lon_r", "lat_r"]].drop_duplicates().copy()
+
+    with rasterio.open(raster_path) as src:
+        print("Reading raster...")
+        band = src.read(1)
+        transform = src.transform
+        nodata = src.nodata
+
+        print("Preparing coordinate arrays...")
+        lon = unique_pts["lon_r"].to_numpy()
+        lat = unique_pts["lat_r"].to_numpy()
+
+        print("Converting to raster indices...")
+        cols, rows = ~transform * (lon, lat)
+        rows = rows.astype(int)
+        cols = cols.astype(int)
+
+        print("Filtering valid indices...")
+        valid = (
+            (rows >= 0) & (rows < band.shape[0]) &
+            (cols >= 0) & (cols < band.shape[1])
+        )
+
+        print("Sampling raster (vectorized)...")
+        dist = np.full(len(unique_pts), np.nan, dtype="float32")
+
+        # tqdm here to track assignment progress (optional but visible)
+        dist[valid] = band[rows[valid], cols[valid]]
+
+        if nodata is not None:
+            dist[dist == nodata] = np.nan
+
+        unique_pts["dist_to_shore_km"] = dist
+
+    print("Merging back...")
+    df = df.merge(unique_pts, on=["lon_r", "lat_r"], how="left")
+
+    print("Cleaning up...")
+    df = df.drop(columns=["lon_r", "lat_r"])
+
+    return df
 
 def add_features(df):
     df = df.copy()
@@ -87,13 +139,13 @@ def add_features(df):
     df["cog_cos"] = np.cos(np.radians(df["cog"]))
 
     # Binary label
-    df["y"] = np.nan
-    df.loc[df["report"] == "fishing", "y"] = 1
-    df.loc[df["report"] == "conf_no_fishing", "y"] = 0
+    #df["y"] = np.nan
+    #df.loc[df["label"] == "fishing", "y"] = 1
+    #df.loc[df["label"] == "conf_no_fishing", "y"] = 0
     
     # Sample weight, unknown = 0
-    df["sample_weight"] = df["y"].notna().astype(np.float32)
-    df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
+    #df["sample_weight"] = df["y"].notna().astype(np.float32)
+    #df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
 
     # Calculated speed in m/s
     df["speed_calc_ms"] = df["dist_to_prev"] / df["dt"]
@@ -134,8 +186,8 @@ def add_features(df):
 #df = add_features(df)
 
 def check_feats(df):
-    counts = df["report"].value_counts().reset_index()
-    counts.columns = ["report", "nr_messages"]
+    counts = df["label"].value_counts().reset_index()
+    counts.columns = ["label", "nr_messages"]
     print(counts)
 
     print(df[FEATURES].isna().sum())
@@ -170,21 +222,6 @@ def check_speed(df):
     print("speed (m/s):", dist / row["dt"])
 
 
-#df.to_parquet("ais_all_msgs_labeled_features_05_all_gear.parquet", index=False)
-
-
-def concat():
-    for i in range(1, 12+1, 3):
-        
-        for year in range(2023, 2025+1):
-            dfs = []
-            for gear in GEAR:
-                df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident2/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
-                dfs.append(df)
-        
-            all_gear_full_month_df = pd.concat(dfs, ignore_index=True)
-            all_gear_full_month_df.to_parquet(f"three_months/all_gear2/{year}_{i}_{i+2}.parquet", index=False)
-
 def concat2():
     for i in range(1, 12+1, 3):
         dfs = []
@@ -201,6 +238,7 @@ def main():
             df = pd.read_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
+            df = close_to_shore(df)
             df = add_features(df)
             check_feats(df)
             df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
