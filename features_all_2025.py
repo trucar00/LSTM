@@ -56,8 +56,8 @@ def column_fixing(df):
 
 # Build features
 
-def close_to_shore(df, threshold_km, raster_path="../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/distance-from-shore.tif"):
-    print(f"Checking distance to shore. Shore threshold: {threshold_km}")
+def close_to_shore(df, raster_path="../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/distance-from-shore.tif"):
+    print(f"Finding distance to shore.")
     df = df.copy()
     print("Rounding coordinates...")
     df["lon_r"] = df["lon"].round(4)
