@@ -2,11 +2,11 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=CPUQ
 ##SBATCH --gres=gpu:1
-#SBATCH --time=1:00:00
+#SBATCH --time=00:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=64G             # GB memory
-#SBATCH --output=other_preds/output_russian_%j.txt    # Log file
+#SBATCH --output=other_preds/output_russian_svalbard_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

@@ -3,3 +3,4 @@
 *.parquet
 *.pkl
 Data/
+*.tif

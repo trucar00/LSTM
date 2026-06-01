@@ -236,17 +236,21 @@ def main():
     for year in range(2025, 2025+1):
         for i in range(1, 12+1, 3):
             df = pd.read_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}.parquet", engine="pyarrow")
-            #df = pd.read_parquet("Data/russian_trawler_cleaned.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
             df = close_to_shore(df)
             df = add_features(df)
             check_feats(df)
             df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
-            #df.to_parquet("russian_trawler_feats.parquet", index=False)
 
+def russian():
+    df = pd.read_parquet("Data/russian_svalbard_trawler_cleaned.parquet", engine="pyarrow")
+    df = close_to_shore(df, raster_path="distance-from-shore.tif")
+    df = add_features(df)
+    df.to_parquet("russian_svalbard_trawler_feats.parquet", index=False)
 
 if __name__ == "__main__":
-    main()
+    #main()
+    russian()
     #concat()
     #concat2()
