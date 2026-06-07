@@ -15,8 +15,8 @@ STRIDE = 128
 #files = sorted(glob.glob("three_months/feats/*.parquet"))
 
 files = [
-    "three_months/feats/2024_1_3_feats.parquet",
-    "three_months/feats/2024_7_9_feats.parquet",
+    "three_months/feats_all_gear/2024_1_3_feats.parquet",
+    "three_months/feats_all_gear/2024_7_9_feats.parquet",
 ]
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
