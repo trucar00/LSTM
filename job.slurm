@@ -2,11 +2,11 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=03:30:00
+#SBATCH --time=06:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=64G             # GB memory
-#SBATCH --output=models/online_lstm_%j.txt    # Log file
+#SBATCH --output=tuning/output_online_tuning_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -36,4 +36,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u model2_big_Online.py
+python -u model_otpuna_online.py
