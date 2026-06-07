@@ -36,4 +36,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u model_otpuna_online.py
+python -u model_optuna_online.py
