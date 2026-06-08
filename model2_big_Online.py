@@ -11,8 +11,8 @@ from pathlib import Path
 
 # Setting of parameters
 
-USE_TUNED_PARAMS = False
-tuned_params_path = Path(f"tuning/best_params.json")
+USE_TUNED_PARAMS = True
+tuned_params_path = Path(f"tuning/best_params_online.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     
@@ -321,7 +321,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 
-model_name = "models/model_online_not_tuned_2024_1_3_4_6.pt"
+model_name = "models/model_online_tuned_2024_1_3_4_6.pt"
 
 best_val = float("inf")
 bad, patience = 0, 3
