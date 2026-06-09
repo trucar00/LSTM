@@ -205,7 +205,7 @@ def concat2():
         all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}.parquet", index=False)
 
 def main(online):
-    for year in range(2024, 2024+1):
+    for year in range(2025, 2025+1):
         for i in range(1, 12+1, 3):
             df = pd.read_parquet(f"three_months/all_gear2/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")

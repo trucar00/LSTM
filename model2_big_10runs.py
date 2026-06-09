@@ -560,6 +560,7 @@ for seed in SEEDS:
     te_ext = run_epoch(model, ext_loader, train=False)
     print(f"[seed {seed}] EXTERNAL LOSS | loss {te_ext[0]:.4f}")
     # External 2025_1_3 test — the metric that matters
+    print("Predicting ", EXTERNAL_TEST_FILE)
     ext = predict_and_score_external(model)
     print(f"[seed {seed}] EXTERNAL 2025 | "
           f"precision {ext['ext_precision']:.3f} "
