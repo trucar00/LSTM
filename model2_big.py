@@ -12,7 +12,7 @@ from pathlib import Path
 # Setting of parameters
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path(f"tuning/best_params_ALL_GEAR.json")
+tuned_params_path = Path(f"tuning/best_params.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     
@@ -321,7 +321,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 
-model_name = "models/model_bilstm_tuned_2024_1_3_4_6_ALL_GEAR.pt"
+model_name = "models/model_bilstm_tuned_2024_1_3_4_6_ALL_GEAR_OLD_PARAMS.pt"
 
 best_val = float("inf")
 bad, patience = 0, 3

@@ -487,7 +487,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/model_bilstm_seed{seed}.pt"
+    model_name = f"models/seed/model_bilstm_seed{seed}.pt"
     best_val = float("inf")
     bad = 0
     history = []
