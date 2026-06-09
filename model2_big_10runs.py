@@ -352,8 +352,7 @@ def predict_and_score_external(model):
 
     model.eval()
     with torch.no_grad():
-        for traj_id, traj in tqdm(df.groupby("trajectory_id", sort=False),
-                                  desc="predict 2025", leave=False):
+        for traj_id, traj in df.groupby("trajectory_id", sort=False):
             idx = traj.index.to_numpy()
             X_all = traj[FEATURES].to_numpy(dtype=np.float32)
             n_traj = len(traj)

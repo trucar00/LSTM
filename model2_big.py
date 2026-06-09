@@ -12,7 +12,7 @@ from pathlib import Path
 # Setting of parameters
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path(f"tuning/best_params.json")
+tuned_params_path = Path(f"tuning/best_params_ALL_GEAR.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     
@@ -339,7 +339,7 @@ for epoch in range(1, 16):
         "val_loss": vl[0],   "val_p": vl[1], "val_r": vl[2],
         "val_f1": vl[3],     "val_acc": vl[4],
     })
-    pd.DataFrame(history).to_csv("training_stats/training_history_tuned_2024_1_3_4_6_ALL_GEAR.csv", index=False)
+    #pd.DataFrame(history).to_csv("training_stats/training_history_tuned_2024_1_3_4_6_ALL_GEAR.csv", index=False)
     if vl[0] < best_val:
         best_val = vl[0]
         torch.save(model.state_dict(), model_name)
@@ -359,6 +359,6 @@ if os.path.exists(model_name):
 te = run_epoch(test_loader, train=False)
 print(f"TEST | loss {te[0]:.4f}  p {te[1]:.3f}  r {te[2]:.3f}  f1 {te[3]:.3f}  acc {te[4]:.3f}")
 
-with open("training_stats/results_tuned_2024_1_3_4_6_ALL_GEAR.json", "w") as f:
+""" with open("training_stats/results_tuned_2024_1_3_4_6_ALL_GEAR.json", "w") as f:
     json.dump({"loss": te[0], "precision": te[1], "recall": te[2],
-               "f1": te[3], "accuracy": te[4], "params": best_params}, f, indent=2)
+               "f1": te[3], "accuracy": te[4], "params": best_params}, f, indent=2) """
