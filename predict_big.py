@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path(f"tuning/best_params.json")
+tuned_params_path = Path(f"tuning/best_params_ALL_GEAR.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     
