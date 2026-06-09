@@ -6,7 +6,7 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=64G             # GB memory
-#SBATCH --output=multi_seeds_result/output_seeds_bilstm_%j.txt    # Log file
+#SBATCH --output=multi_seeds_results/output_seeds_bilstm_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

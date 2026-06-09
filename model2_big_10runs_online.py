@@ -38,7 +38,7 @@ from tqdm import tqdm
 # ============================================================
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path("tuning/best_params_ALL_GEAR.json")
+tuned_params_path = Path("tuning/best_params_online_ALL_GEAR.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -199,11 +199,11 @@ class FishingBiLSTM(nn.Module):
             hidden_size=hidden,
             num_layers=n_layers,
             batch_first=True,
-            bidirectional=True,
+            bidirectional=False,
             dropout=dropout if n_layers > 1 else 0.0,
         )
         self.head = nn.Sequential(
-            nn.Linear(2 * hidden, dense),
+            nn.Linear(hidden, dense),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(dense, 1),
@@ -334,11 +334,18 @@ df_ext_base = df_ext_base.sort_values(["trajectory_id", "date_time_utc"]).reset_
 
 
 
-def predict_and_score_external(model):
-    """Run overlapping-window prediction on the pre-normalized 2025 frame,
-    average overlapping predictions, then score using the `report` column.
+INFER_BATCH = WINDOW   # how many "ending-at-t" windows to forward in one pass
 
-    Metric definitions (match the user's manual evaluation):
+def predict_and_score_external(model):
+    """Run ONLINE (causal) per-message prediction on the pre-normalized 2025
+    frame, then score using the `report` column.
+
+    For each message at time t, the model sees x_{t-W+1} ... x_t and we take
+    only the prediction at the last position. Equivalent to what the
+    production online-inference script does — every message gets exactly ONE
+    prediction, using only past info.
+
+    Metric definitions (unchanged):
       - recall:        correctly predicted fishing among report == "fishing"
       - acc_conf:      correctly predicted non-fishing among report == "conf_no_fishing"
       - precision:     report == "fishing" hits among ALL rows with pred_fishing == 1
@@ -347,8 +354,7 @@ def predict_and_score_external(model):
       - f1:            harmonic mean of precision and recall above
     """
     df = df_ext_base.copy()
-    df["pred_sum"]   = 0.0
-    df["pred_count"] = 0.0
+    df["p_fishing"] = np.nan
 
     model.eval()
     with torch.no_grad():
@@ -356,32 +362,40 @@ def predict_and_score_external(model):
                                   desc="predict 2025", leave=False):
             idx = traj.index.to_numpy()
             X_all = traj[FEATURES].to_numpy(dtype=np.float32)
-            n_traj = len(traj)
-            if n_traj < 8:
+            n, F = X_all.shape
+            if n < 1:
                 continue
-            starts = list(range(0, max(1, n_traj - WINDOW + 1), STRIDE))
-            final_start = max(0, n_traj - WINDOW)
-            if starts[-1] != final_start:
-                starts.append(final_start)  # ensure end of trajectory is covered
-            for start in starts:
-                end = start + WINDOW
-                x = X_all[start:end]
-                L = len(x)
-                if L < WINDOW:
-                    pad = WINDOW - L
-                    x = np.vstack([x, np.zeros((pad, x.shape[1]), dtype=np.float32)])
-                x_tensor = torch.from_numpy(x[None, :, :]).to(device)
-                logits = model(x_tensor)
-                probs = torch.sigmoid(logits).cpu().numpy()[0]
-                valid_idx   = idx[start:start + L]
-                valid_probs = probs[:L]
-                df.loc[valid_idx, "pred_sum"]   += valid_probs
-                df.loc[valid_idx, "pred_count"] += 1
 
-    # Rows we never predicted on (e.g. trajectories with < 8 points) get NaN here,
-    # which becomes pred_fishing = 0. That's fine for the report-based scoring
-    # below since those rows just look like "not predicted as fishing".
-    df["p_fishing"]    = df["pred_sum"] / df["pred_count"]
+            # --- Cold-start phase: positions t = 0 .. min(WINDOW, n) - 1 ---
+            # One forward pass on X_all[:WINDOW] gives causal predictions at
+            # every one of those positions because the LSTM is unidirectional.
+            head_len = min(WINDOW, n)
+            x_head = torch.from_numpy(X_all[:head_len][None, :, :]).to(device)
+            probs_head = torch.sigmoid(model(x_head))[0].cpu().numpy()  # (head_len,)
+
+            traj_probs = np.empty(n, dtype=np.float32)
+            traj_probs[:head_len] = probs_head
+
+            # --- Steady-state phase: positions t = WINDOW .. n-1 ---
+            # For each such t, window is X_all[t-WINDOW+1 : t+1]; keep last pred.
+            if n > WINDOW:
+                sw = np.lib.stride_tricks.sliding_window_view(
+                    X_all, window_shape=WINDOW, axis=0
+                )                                  # (n - WINDOW + 1, F, WINDOW)
+                sw = sw.transpose(0, 2, 1)         # -> (n - WINDOW + 1, WINDOW, F)
+                sw = sw[1:]                        # drop window ending at WINDOW-1
+                                                   # (already covered by head)
+
+                for i in range(0, len(sw), INFER_BATCH):
+                    batch_np = np.ascontiguousarray(sw[i:i + INFER_BATCH])
+                    batch = torch.from_numpy(batch_np).to(device)
+                    logits = model(batch)                                  # (B, WINDOW)
+                    last_probs = torch.sigmoid(logits[:, -1]).cpu().numpy()
+                    t_start = WINDOW + i
+                    traj_probs[t_start : t_start + len(last_probs)] = last_probs
+
+            df.loc[idx, "p_fishing"] = traj_probs
+
     df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
 
     # True positives (TP) of labeled
@@ -453,7 +467,7 @@ def predict_and_score_external(model):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seed_results/bilstm_seed_results.csv"
+results_csv_path = "multi_seed_results/lstm_seed_results.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -488,7 +502,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/model_bilstm_seed{seed}.pt"
+    model_name = f"models/model_lstm_seed{seed}.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -507,7 +521,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_bilstm_seed{seed}.csv", index=False
+            f"training_stats/training_history_lstm_seed{seed}.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
@@ -574,6 +588,6 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seed_results/bilstm_seed_results_summary.csv")
+summary.to_csv("multi_seed_results/lstm_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seed_results/bilstm_seed_results_summary.csv")
+print(f"Summary:       multi_seed_results/lstm_seed_results_summary.csv")
