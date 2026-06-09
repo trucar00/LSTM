@@ -54,7 +54,7 @@ def column_fixing(df):
 
 # Build features
 
-def add_features(df):
+def add_features(df, online=False):
     df = df.copy()
     df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
     df = df.sort_values(["trajectory_id", "date_time_utc"]).copy()
@@ -123,11 +123,20 @@ def add_features(df):
     # Smooth noisy derivative features
     SMOOTH_COLS = ["accel", "jerk", "dcog"]
     WINDOW = 5
-    for col in SMOOTH_COLS:
-        df[f"ra_{col}"] = (
-            df.groupby("trajectory_id")[col]
-              .transform(lambda x: x.rolling(window=WINDOW, center=True, min_periods=1).mean())
-        )
+
+    if online:
+        for col in SMOOTH_COLS:
+            df[f"ra_{col}"] = (
+                df.groupby("trajectory_id")[col]
+                .transform(lambda x: x.rolling(window=WINDOW, center=False, min_periods=1).mean())
+            )
+    else:
+
+        for col in SMOOTH_COLS:
+            df[f"ra_{col}"] = (
+                df.groupby("trajectory_id")[col]
+                .transform(lambda x: x.rolling(window=WINDOW, center=True, min_periods=1).mean())
+            )
 
     return df
 
@@ -195,19 +204,19 @@ def concat2():
         all_vessels_three_months = pd.concat(dfs, ignore_index=True)
         all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}.parquet", index=False)
 
-def main():
-    for year in range(2023, 2023+1):
+def main(online):
+    for year in range(2024, 2024+1):
         for i in range(1, 12+1, 3):
             df = pd.read_parquet(f"three_months/all_gear2/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
-            df = add_features(df)
+            df = add_features(df, online=online)
             check_feats(df)
             print(df["report"].unique())
-            df.to_parquet(f"three_months/feats_all_w_traps/{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/feats_all_w_traps_online/{year}_{i}_{i+2}_feats.parquet", index=False)
 
 
 if __name__ == "__main__":
-    main()
+    main(online=True)
     #concat()
     #concat2()

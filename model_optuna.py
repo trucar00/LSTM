@@ -42,6 +42,11 @@ train_mmsi = set(mmsis[:int(0.70*n)])
 val_mmsi   = set(mmsis[int(0.70*n):int(0.85*n)])
 test_mmsi  = set(mmsis[int(0.85*n):])
 
+print(len(train_mmsi), len(val_mmsi), len(test_mmsi))
+print(len(train_mmsi & val_mmsi))
+print(len(train_mmsi & test_mmsi))
+print(len(val_mmsi & test_mmsi))
+
 
 mu_sigma_path = Path(f"tuning/parameters_2024_optuna_ALL_GEAR.pkl")
 if mu_sigma_path.exists():
