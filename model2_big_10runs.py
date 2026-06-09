@@ -7,7 +7,7 @@ For each seed:
   3. Reload best checkpoint, compute the internal 15% test metrics (sanity check).
   4. Predict on the 2025_1_3 file (overlapping windows averaged) and score
      against y_train on sample_weight == 1 rows.
-  5. Append one row to multi_seed_results/seed_results.csv.
+  5. Append one row to multi_seeds_results/seed_results.csv.
 
 What is FIXED across seeds:
   - MMSI split (rng seed = 42)
@@ -481,7 +481,7 @@ def predict_and_score_external(model):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seed_results/bilstm_seed_results.csv"
+results_csv_path = "multi_seeds_results/bilstm_seed_results.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -560,6 +560,10 @@ for seed in SEEDS:
     te_ext = run_epoch(model, ext_loader, train=False)
     print(f"[seed {seed}] EXTERNAL LOSS | loss {te_ext[0]:.4f}")
     # External 2025_1_3 test — the metric that matters
+    del optimizer, scheduler          # free Adam state
+    gc.collect()
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
     print("Predicting ", EXTERNAL_TEST_FILE)
     ext = predict_and_score_external(model)
     print(f"[seed {seed}] EXTERNAL 2025 | "
@@ -605,6 +609,6 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seed_results/bilstm_seed_results_summary.csv")
+summary.to_csv("multi_seeds_results/bilstm_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seed_results/bilstm_seed_results_summary.csv")
+print(f"Summary:       multi_seeds_results/bilstm_seed_results_summary.csv")
