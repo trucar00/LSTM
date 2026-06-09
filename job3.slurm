@@ -5,7 +5,7 @@
 #SBATCH --time=04:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=64G             # GB memory
+#SBATCH --mem=128G             # GB memory
 #SBATCH --output=three_months/feats_all_w_traps_online/output_feats_online_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
