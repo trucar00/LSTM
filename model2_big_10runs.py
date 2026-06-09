@@ -77,8 +77,8 @@ BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk",
 SEASON_FEATURES = ["month_sin", "month_cos"]
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-#SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-SEEDS = [0, 1]
+SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+#SEEDS = [0, 1]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
@@ -410,7 +410,6 @@ def predict_and_score_external(model):
     n_pred_fish_of_unknown    = int(np.sum(pred_fishing & rep_unknown))
     n_pred_no_fish_of_unknown = int(np.sum(~pred_fishing & rep_unknown))
 
-    
 
     # True positives (TP) of labeled
     #pred_pos_df = df[df["pred_fishing"] == 1]
@@ -601,7 +600,7 @@ print(df_res.to_string(index=False))
 
 metric_cols = [
     "int_loss", "int_f1", "int_precision", "int_recall", "int_accuracy",
-    "ext_loss", "ext_f1", "ext_precision", "ext_recall", "ext_accuracy",
+    "ext_loss", "ext_f1", "ext_precision", "ext_recall", "ext_specificity", "ext_accuracy",
 ]
 summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
