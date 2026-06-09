@@ -42,7 +42,7 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-MODEL_PATH = "models/model_full_all_gear2_tuned_2023_2024.pt"
+MODEL_PATH = "models/model_bilstm_tuned_2024_1_3_4_6_ALL_GEAR.pt"
 
 # --------------------------------------------------
 # Same model class as training
@@ -77,7 +77,7 @@ class FishingBiLSTM(nn.Module):
 # --------------------------------------------------
 
 
-with open("parameters_full_all_gear2_2023_2024.pkl", "rb") as f:
+with open("parameters_2024_1_3_4_6_ALL_GEAR.pkl", "rb") as f:
     params = pickle.load(f)
 
 mu = params["mu"]
@@ -89,8 +89,8 @@ print("Read mu and sigma from file")
 # If not built yet: run df_predict = add_features(raw_may_df)
 # --------------------------------------------------
 
-#df_predict = pd.read_parquet("three_months/feats_all_gear2/2025_1_3_feats.parquet")
-df_predict = pd.read_parquet("other_preds/russian_svalbard_trawler_feats.parquet")
+df_predict = pd.read_parquet("three_months/feats_all_gear_w_traps/2025_1_3_feats.parquet")
+#df_predict = pd.read_parquet("other_preds/russian_svalbard_trawler_feats.parquet")
 df_predict["date_time_utc"] = pd.to_datetime(df_predict["date_time_utc"])
 month = df_predict["date_time_utc"].dt.month
 
@@ -173,7 +173,70 @@ df_predict["pred_fishing"] = (df_predict["p_fishing"] > 0.5).astype(int)
 
 df_predict = df_predict.drop(columns=["pred_sum", "pred_count"])
 
-df_predict.to_parquet("other_preds/russian_svalbard_trawler_pred.parquet", index=False)
+#df_predict.to_parquet("other_preds/russian_svalbard_trawler_pred.parquet", index=False)
 
 print(df_predict[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
 print(df_predict["pred_fishing"].value_counts())
+
+
+
+# PRINT OUT STATS
+pred_fishing = (df_predict["pred_fishing"].to_numpy())
+
+n_pred_fish = int(np.sum(pred_fishing))
+n_pred_no_fish = int(np.sum(~pred_fishing))
+
+report = df_predict["report"].to_numpy()
+rep_fish = report == "fishing"
+rep_conf = report == "conf_no_fishing"
+
+n_reported_fish = int(np.sum(rep_fish))
+n_reported_conf_no_fish = int(np.sum(rep_conf))
+
+tp = int(np.sum(pred_fishing & rep_fish))
+fp = int(np.sum(pred_fishing & rep_conf))
+tn = int(np.sum(~pred_fishing & rep_conf))
+fn = int(np.sum(~pred_fishing & rep_fish))
+
+# unknowns
+rep_unknown = report == "unknown"
+n_unknown = int(rep_unknown.sum())
+n_pred_fish_of_unknown    = int(np.sum(pred_fishing & rep_unknown))
+n_pred_no_fish_of_unknown = int(np.sum(~pred_fishing & rep_unknown))
+
+# Precision of confirmed.
+precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+
+# Accuracy of confirmed.
+accuracy = (tp + tn) / (tp + tn + fp +fn) if (tp + tn + fp +fn) > 0 else 0.0
+
+# Recall (sensitvity)
+recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+# Specificity, true negative rate, on confirmed non-fishing rows
+specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+
+# F1 Score
+f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+
+metrics = {
+    "ext_tp":                  tp,
+    "ext_fp":                  fp,
+    "ext_tn":                  tn,
+    "ext_fn":                  fn,
+    "ext_accuracy":            accuracy,
+    "ext_recall":              recall,
+    "ext_specificity":         specificity,
+    "ext_precision":           precision,           
+    "ext_f1":                  f1,
+    "ext_n_pred_fish":         n_pred_fish,
+    "ext_n_pred_no_fish":      n_pred_no_fish,
+    "ext_n_reported_fish":     n_reported_fish,
+    "ext_n_reported_no_fish":  n_reported_conf_no_fish,
+    "ext_n_unknowns":          n_unknown,
+    "ext_n_pred_fish_of_unknown": n_pred_fish_of_unknown,
+    "ext_n_pred_no_fish_of_unknown": n_pred_no_fish_of_unknown
+}
+
+print(metrics["ext_accuracy"], metrics["ext_recall"], metrics["ext_f1"], metrics["ext_precision"])
