@@ -89,7 +89,7 @@ print("Read mu and sigma from file")
 # If not built yet: run df_predict = add_features(raw_may_df)
 # --------------------------------------------------
 
-df_predict = pd.read_parquet("three_months/feats_all_gear_w_traps/2025_1_3_feats.parquet")
+df_predict = pd.read_parquet("three_months/feats_all_w_traps/2025_1_3_feats.parquet")
 #df_predict = pd.read_parquet("other_preds/russian_svalbard_trawler_feats.parquet")
 df_predict["date_time_utc"] = pd.to_datetime(df_predict["date_time_utc"])
 month = df_predict["date_time_utc"].dt.month
