@@ -76,7 +76,8 @@ BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk",
 SEASON_FEATURES = ["month_sin", "month_cos"]
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+#SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+SEEDS = [0, 1]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
@@ -310,6 +311,16 @@ def run_epoch(model, loader, optimizer=None, train=False):
 
 print(f"Preparing external test set: {EXTERNAL_TEST_FILE}")
 df_ext_base = pd.read_parquet(EXTERNAL_TEST_FILE)
+
+# Load the external test set for finding the loss
+ext_mmsi = set(df_ext_base["mmsi"].unique())
+ext_ds = AISWindowDataset(
+    [EXTERNAL_TEST_FILE], ext_mmsi, FEATURES, mu, sigma,
+    stride=STRIDE, window=WINDOW,
+)
+ext_loader = DataLoader(ext_ds, batch_size=BATCH, shuffle=False,
+                        num_workers=0, pin_memory=False)
+
 df_ext_base["date_time_utc"] = pd.to_datetime(df_ext_base["date_time_utc"])
 _month = df_ext_base["date_time_utc"].dt.month
 df_ext_base["month_sin"] = np.sin(2 * np.pi * _month / 12)
@@ -320,6 +331,7 @@ df_ext_base["ra_accel"] = df_ext_base["ra_accel"].clip(-5, 5)
 df_ext_base["ra_jerk"]  = df_ext_base["ra_jerk"].clip(-5, 5)
 df_ext_base["ra_dcog"]  = df_ext_base["ra_dcog"].clip(-5, 5)
 df_ext_base = df_ext_base.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
+
 
 
 def predict_and_score_external(model):
@@ -372,59 +384,68 @@ def predict_and_score_external(model):
     df["p_fishing"]    = df["pred_sum"] / df["pred_count"]
     df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
 
-    # Recall — over confirmed fishing rows
-    fishing_df = df[df["report"] == "fishing"]
-    n_fish = len(fishing_df)
-    tp = int((fishing_df["pred_fishing"] == 1).sum())
-    recall = tp / n_fish if n_fish > 0 else 0.0
-
-    # Accuracy on confirmed non-fishing rows
-    conf_df = df[df["report"] == "conf_no_fishing"]
-    n_conf = len(conf_df)
-    tn_conf = int((conf_df["pred_fishing"] == 0).sum())
-    acc_conf = tn_conf / n_conf if n_conf > 0 else 0.0
-
-    # Precision — over ALL rows predicted as fishing (unknowns included in denom).
-    # This is the strict version that matches the user's existing eval. It will
-    # look low because many unknown rows are actually unreported fishing.
+    # True positives (TP) of labeled
     pred_pos_df = df[df["pred_fishing"] == 1]
-    n_pred_pos = len(pred_pos_df)
-    tp_prec = int((pred_pos_df["report"] == "fishing").sum())
-    precision = tp_prec / n_pred_pos if n_pred_pos > 0 else 0.0
+    tp = int((pred_pos_df["report"] == "fishing").sum())
 
-    # Precision (confirmed only) — restrict denominator to rows where the label
-    # is actually known. Excludes unknowns so unreported fishing doesn't penalize
-    # the model. Use this one to report "when the model fires on a labeled row,
-    # how often is it right?"
-    pred_pos_confirmed = pred_pos_df[
-        pred_pos_df["report"].isin(["fishing", "conf_no_fishing"])
-    ]
-    n_pred_pos_confirmed = len(pred_pos_confirmed)
-    tp_prec_conf = int((pred_pos_confirmed["report"] == "fishing").sum())
-    precision_confirmed = (
-        tp_prec_conf / n_pred_pos_confirmed if n_pred_pos_confirmed > 0 else 0.0
-    )
+    # False positives (FP) of labeled
+    fp = int((pred_pos_df["report"] == "conf_no_fishing").sum())
 
-    f1 = 2 * precision * recall / max(precision + recall, 1e-9)
-    f1_confirmed = (
-        2 * precision_confirmed * recall
-        / max(precision_confirmed + recall, 1e-9)
-    )
+    # True negatives (TN) of labeled
+    pred_neg_df = df[df["pred_fishing"] == 0]
+    tn = int((pred_neg_df["report"] == "conf_no_fishing").sum())
+
+    # False negatives (FN) of labeled
+    fn = int((pred_neg_df["report"] == "fishing").sum())
+
+    # Precision of confirmed.
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+
+    # Accuracy of confirmed.
+    accuracy = (tp + tn) / (tp + tn + fp +fn) if (tp + tn + fp +fn) > 0 else 0.0
+
+    # Recall (sensitvity)
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+    # Specificity, true negative rate, on confirmed non-fishing rows
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+
+    # F1 Score
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    # Number of predictions for each class
+    n_pred_fish = int((df["pred_fishing"] == 1).sum())
+    n_pred_no_fish = int((df["pred_fishing"] == 0).sum())
+
+    # Number of reports for each class
+    n_reported_fish = int((df["report"] == "fishing").sum())
+    n_reported_conf_no_fish = int((df["report"] == "conf_no_fishing").sum())
+
+    # Number of unknowns
+    unknown_df = df[df["report"] == "unknown"]
+    n_unknown = int(len(unknown_df))
+
+    n_pred_fish_of_unknown = int((unknown_df["pred_fishing"] == 1).sum())
+    n_pred_no_fish_of_unknown = int((unknown_df["pred_fishing"] == 0).sum())
+
 
     return {
-        "ext_precision":           precision,            # all pred==1 in denom
-        "ext_precision_confirmed": precision_confirmed,  # labeled-only denom
+        "ext_tp":                  tp,
+        "ext_fp":                  fp,
+        "ext_tn":                  tn,
+        "ext_fn":                  fn,
+        "ext_accuracy":            accuracy,
         "ext_recall":              recall,
+        "ext_specificity":         specificity,
+        "ext_precision":           precision,           
         "ext_f1":                  f1,
-        "ext_f1_confirmed":        f1_confirmed,
-        "ext_acc_conf":            acc_conf,
-        "ext_n_fishing":           int(n_fish),
-        "ext_n_conf_no":           int(n_conf),
-        "ext_n_pred_pos":          int(n_pred_pos),           # total predicted positives
-        "ext_n_pred_pos_confirmed": int(n_pred_pos_confirmed), # predicted positives on labeled rows
-        "ext_tp_fishing":          tp,                   # correct among report==fishing
-        "ext_tn_conf":             tn_conf,              # correct among report==conf_no_fishing
-        "ext_tp_precision":        tp_prec,              # report==fishing among all predicted positives
+        "ext_n_pred_fish":         n_pred_fish,
+        "ext_n_pred_no_fish":      n_pred_no_fish,
+        "ext_n_reported_fish":     n_reported_fish,
+        "ext_n_reported_no_fish":  n_reported_conf_no_fish,
+        "ext_n_unknowns":          n_unknown,
+        "ext_n_pred_fish_of_unknown": n_pred_fish_of_unknown,
+        "ext_n_pred_no_fish_of_unknown": n_pred_no_fish_of_unknown
     }
 
 
@@ -436,7 +457,7 @@ os.makedirs("models",              exist_ok=True)
 os.makedirs("training_stats",      exist_ok=True)
 os.makedirs("multi_seed_results",  exist_ok=True)
 
-results_csv_path = "multi_seed_results/seed_results.csv"
+results_csv_path = "multi_seed_results/bilstm_seed_results.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -490,7 +511,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_seed{seed}.csv", index=False
+            f"training_stats/training_history_bilstm_seed{seed}.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
@@ -510,16 +531,18 @@ for seed in SEEDS:
     print(f"[seed {seed}] INTERNAL TEST | "
           f"loss {te[0]:.4f} p {te[1]:.3f} r {te[2]:.3f} "
           f"f1 {te[3]:.3f} acc {te[4]:.3f}")
-
+    
+    # External loss
+    te_ext = run_epoch(model, ext_loader, train=False)
+    print(f"[seed {seed}] EXTERNAL LOSS | loss {te_ext[0]:.4f}")
     # External 2025_1_3 test — the metric that matters
     ext = predict_and_score_external(model)
     print(f"[seed {seed}] EXTERNAL 2025 | "
-          f"p_all {ext['ext_precision']:.3f} "
-          f"p_conf {ext['ext_precision_confirmed']:.3f} "
-          f"r {ext['ext_recall']:.3f} "
+          f"precision {ext['ext_precision']:.3f} "
+          f"recall {ext['ext_recall']:.3f} "
+          f"specificity {ext['ext_specificity']:.3f} "
           f"f1 {ext['ext_f1']:.3f} "
-          f"acc_conf {ext['ext_acc_conf']:.3f} "
-          f"| n_pred_pos {ext['ext_n_pred_pos']}")
+          f"accuracy {ext['ext_accuracy']:.3f} ")
 
     row = {
         "seed": seed,
@@ -530,6 +553,7 @@ for seed in SEEDS:
         "int_recall":    te[2],
         "int_f1":        te[3],
         "int_accuracy":  te[4],
+        "ext_loss":      te_ext[0],
         **ext,
     }
     all_results.append(row)
@@ -547,16 +571,13 @@ print("\n========== SUMMARY ==========")
 print(df_res.to_string(index=False))
 
 metric_cols = [
-    "int_f1", "int_precision", "int_recall", "int_accuracy",
-    "ext_f1", "ext_f1_confirmed",
-    "ext_precision", "ext_precision_confirmed",
-    "ext_recall", "ext_acc_conf",
-    "ext_n_pred_pos",
+    "int_loss", "int_f1", "int_precision", "int_recall", "int_accuracy",
+    "ext_loss", "ext_f1", "ext_precision", "ext_recall", "ext_accuracy",
 ]
 summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seed_results/seed_results_summary.csv")
+summary.to_csv("multi_seed_results/bilstm_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seed_results/seed_results_summary.csv")
+print(f"Summary:       multi_seed_results/bilstm_seed_results_summary.csv")
