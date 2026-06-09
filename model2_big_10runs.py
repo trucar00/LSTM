@@ -32,6 +32,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, IterableDataset
 from tqdm import tqdm
+import gc
 
 # ============================================================
 # Config — same loading logic as your training script
@@ -381,21 +382,49 @@ def predict_and_score_external(model):
     # which becomes pred_fishing = 0. That's fine for the report-based scoring
     # below since those rows just look like "not predicted as fishing".
     df["p_fishing"]    = df["pred_sum"] / df["pred_count"]
-    df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
+    #df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
+
+    pred_fishing = (df["p_fishing"].to_numpy() > 0.5)
+
+    n_pred_fish = int(np.sum(pred_fishing))
+    n_pred_no_fish = int(np.sum(~pred_fishing))
+
+    report = df["report"].to_numpy()
+    rep_fish = report == "fishing"
+    rep_conf = report == "conf_no_fishing"
+
+    del df
+    gc.collect()
+
+    n_reported_fish = int(np.sum(rep_fish))
+    n_reported_conf_no_fish = int(np.sum(rep_conf))
+
+    tp = int(np.sum(pred_fishing & rep_fish))
+    fp = int(np.sum(pred_fishing & rep_conf))
+    tn = int(np.sum(~pred_fishing & rep_conf))
+    fn = int(np.sum(~pred_fishing & rep_fish))
+
+    # unknowns
+    rep_unknown = report == "unknown"
+    n_unknown = int(rep_unknown.sum())
+    n_pred_fish_of_unknown    = int(np.sum(pred_fishing & rep_unknown))
+    n_pred_no_fish_of_unknown = int(np.sum(~pred_fishing & rep_unknown))
+
+    
 
     # True positives (TP) of labeled
-    pred_pos_df = df[df["pred_fishing"] == 1]
-    tp = int((pred_pos_df["report"] == "fishing").sum())
+    #pred_pos_df = df[df["pred_fishing"] == 1]
+    #tp = int((pred_pos_df["report"] == "fishing").sum())
 
     # False positives (FP) of labeled
-    fp = int((pred_pos_df["report"] == "conf_no_fishing").sum())
+    #fp = int((pred_pos_df["report"] == "conf_no_fishing").sum())
 
     # True negatives (TN) of labeled
-    pred_neg_df = df[df["pred_fishing"] == 0]
-    tn = int((pred_neg_df["report"] == "conf_no_fishing").sum())
+    #pred_neg_df = df[df["pred_fishing"] == 0]
+    #tn = int((pred_neg_df["report"] == "conf_no_fishing").sum())
 
     # False negatives (FN) of labeled
-    fn = int((pred_neg_df["report"] == "fishing").sum())
+    #fn = int((pred_neg_df["report"] == "fishing").sum())
 
     # Precision of confirmed.
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
@@ -413,19 +442,19 @@ def predict_and_score_external(model):
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     # Number of predictions for each class
-    n_pred_fish = int((df["pred_fishing"] == 1).sum())
-    n_pred_no_fish = int((df["pred_fishing"] == 0).sum())
+    #n_pred_fish = int((df["pred_fishing"] == 1).sum())
+    #n_pred_no_fish = int((df["pred_fishing"] == 0).sum())
 
     # Number of reports for each class
-    n_reported_fish = int((df["report"] == "fishing").sum())
-    n_reported_conf_no_fish = int((df["report"] == "conf_no_fishing").sum())
+    #n_reported_fish = int((df["report"] == "fishing").sum())
+    #n_reported_conf_no_fish = int((df["report"] == "conf_no_fishing").sum())
 
     # Number of unknowns
-    unknown_df = df[df["report"] == "unknown"]
-    n_unknown = int(len(unknown_df))
+    #unknown_df = df[df["report"] == "unknown"]
+    #n_unknown = int(len(unknown_df))
 
-    n_pred_fish_of_unknown = int((unknown_df["pred_fishing"] == 1).sum())
-    n_pred_no_fish_of_unknown = int((unknown_df["pred_fishing"] == 0).sum())
+    #n_pred_fish_of_unknown = int((unknown_df["pred_fishing"] == 1).sum())
+    #n_pred_no_fish_of_unknown = int((unknown_df["pred_fishing"] == 0).sum())
 
 
     return {
@@ -555,6 +584,8 @@ for seed in SEEDS:
 
     # Save incrementally so a crash doesn't lose everything
     pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
+    del model, optimizer, scheduler
+    gc.collect()
 
 
 # ============================================================
