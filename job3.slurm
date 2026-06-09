@@ -6,7 +6,7 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=output_mu_sigma_2024_1_3_4_6_ALL_GEAR_%j.txt    # Log file
+#SBATCH --output=output_mu_sigma_2023_and_2024_ALL_GEAR_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
