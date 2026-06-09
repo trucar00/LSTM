@@ -230,7 +230,7 @@ def masked_loss(logits, y, mask):
 # ------------------------------------------------------------------
 
 def cache_windows(mmsi_set, name, window, stride):
-    out_path = Path(f"tuning/cache_{name}_w{window}_s{stride}_ALL_GEAR.pt")
+    out_path = Path(f"tuning/cache_{name}_w{window}_s{stride}_ALL_GEAR_online.pt")
     if out_path.exists():
         print(f"  already cached: {out_path.name}")
         return
@@ -298,8 +298,8 @@ def train_one_config(cfg, trial=None, max_epochs=6):
     torch.manual_seed(42)
 
     # Load cached windows instead of re-reading parquet
-    train_cache = torch.load(f"tuning/cache_train_w{cfg['window']}_s{cfg['stride']}_ALL_GEAR.pt")
-    val_cache   = torch.load(f"tuning/cache_val_w{cfg['window']}_s{cfg['stride']}_ALL_GEAR.pt")
+    train_cache = torch.load(f"tuning/cache_train_w{cfg['window']}_s{cfg['stride']}_ALL_GEAR_online.pt")
+    val_cache   = torch.load(f"tuning/cache_val_w{cfg['window']}_s{cfg['stride']}_ALL_GEAR_online.pt")
 
     train_ds = TensorDataset(train_cache["x"], train_cache["y"], train_cache["m"])
     val_ds   = TensorDataset(val_cache["x"],   val_cache["y"],   val_cache["m"])
@@ -379,8 +379,8 @@ def objective(trial):
 
 study = optuna.create_study(
     direction="minimize",
-    study_name="fishing_lstm_search_ALL_GEAR",
-    storage="sqlite:///tuning/optuna_fishing_online_ALL_GEAR.db",   # so you can resume / inspect
+    study_name="fishing_lstm_search_NEW_ALL_GEAR",
+    storage="sqlite:///tuning/optuna_fishing_online_NEW_ALL_GEAR.db",   # so you can resume / inspect
     load_if_exists=True,
     pruner=optuna.pruners.MedianPruner(n_warmup_steps=2, n_startup_trials=5),
     sampler=optuna.samplers.TPESampler(seed=42),
@@ -393,6 +393,6 @@ print("val_loss:", study.best_value)
 print("params:  ", study.best_params)
 
 # Persist best params to use later when scaling up
-with open("tuning/best_params_online_ALL_GEAR.json", "w") as f:
+with open("tuning/best_params_online_NEW_ALL_GEAR.json", "w") as f:
     json.dump({"best_value": study.best_value,
                "best_params": study.best_params}, f, indent=2)

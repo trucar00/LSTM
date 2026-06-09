@@ -2,11 +2,11 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=CPUQ
 # #SBATCH --gres=gpu:1
-#SBATCH --time=00:30:00
+#SBATCH --time=02:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=tuning/output_mu_sigma_online_all_gear_%j.txt    # Log file
+#SBATCH --output=tuning/output_optuna_online_NEW%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -36,4 +36,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u create_mu_and_sigma.py
+python -u model_optuna_online.py
