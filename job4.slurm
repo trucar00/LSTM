@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=CPUQ
-##SBATCH --gres=gpu:1
-#SBATCH --time=01:30:00
+#SBATCH --partition=GPUQ
+#SBATCH --gres=gpu:1
+#SBATCH --time=10:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory

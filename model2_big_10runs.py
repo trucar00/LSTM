@@ -560,10 +560,7 @@ for seed in SEEDS:
     te_ext = run_epoch(model, ext_loader, train=False)
     print(f"[seed {seed}] EXTERNAL LOSS | loss {te_ext[0]:.4f}")
     # External 2025_1_3 test — the metric that matters
-    del optimizer, scheduler          # free Adam state
-    gc.collect()
-    torch.cuda.empty_cache()
-    torch.cuda.synchronize()
+    
     print("Predicting ", EXTERNAL_TEST_FILE)
     ext = predict_and_score_external(model)
     print(f"[seed {seed}] EXTERNAL 2025 | "
@@ -589,9 +586,10 @@ for seed in SEEDS:
 
     # Save incrementally so a crash doesn't lose everything
     pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
+    torch.cuda.synchronize()
     del model, optimizer, scheduler
     gc.collect()
-
+    torch.cuda.empty_cache()
 
 # ============================================================
 # Summary across seeds
