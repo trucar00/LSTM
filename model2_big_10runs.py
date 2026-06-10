@@ -78,7 +78,7 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
 SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-#SEEDS = [0, 1]
+#SEEDS = [8, 9]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
