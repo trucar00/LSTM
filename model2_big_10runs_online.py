@@ -1,5 +1,5 @@
 """
-Multi-seed BiLSTM training + evaluation on 2025_1_3 external test set.
+Multi-seed LSTM training + evaluation on 2025_1_3 external test set.
 
 For each seed:
   1. Re-initialize the model / optimizer / scheduler.
@@ -7,7 +7,7 @@ For each seed:
   3. Reload best checkpoint, compute the internal 15% test metrics (sanity check).
   4. Predict on the 2025_1_3 file (overlapping windows averaged) and score
      against y_train on sample_weight == 1 rows.
-  5. Append one row to multi_seed_results/seed_results.csv.
+  5. Append one row to multi_seeds_results/seed_results.csv.
 
 What is FIXED across seeds:
   - MMSI split (rng seed = 42)
@@ -38,7 +38,7 @@ from tqdm import tqdm
 # ============================================================
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path("tuning/best_params_online_ALL_GEAR.json")
+tuned_params_path = Path("tuning/best_params_online_NEW_ALL_GEAR.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -65,19 +65,19 @@ else:
     best_params = None
 
 files = [
-    "three_months/feats_all_w_traps/2024_1_3_feats.parquet",
-    "three_months/feats_all_w_traps/2024_4_6_feats.parquet",
+    "three_months/feats_all_w_traps_online/2024_1_3_feats.parquet",
+    "three_months/feats_all_w_traps_online/2024_4_6_feats.parquet",
 ]
 
-EXTERNAL_TEST_FILE = "three_months/feats_all_w_traps/2025_1_3_feats.parquet"
+EXTERNAL_TEST_FILE = "three_months/feats_all_w_traps_online/2025_1_3_feats.parquet"
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk",
                  "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
 SEASON_FEATURES = ["month_sin", "month_cos"]
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-#SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-SEEDS = [0, 1]
+SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+#SEEDS = [0, 1]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
@@ -103,7 +103,7 @@ test_mmsi  = set(mmsis[int(0.85 * n):])
 # Normalization stats
 # ============================================================
 
-mu_sigma_path = Path("parameters_2024_1_3_4_6_ALL_GEAR.pkl")
+mu_sigma_path = Path("parameters_2024_1_3_4_6_ALL_GEAR_online.pkl")
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
@@ -190,7 +190,7 @@ class AISWindowDataset(IterableDataset):
                 yield from self.make_windows(traj)
 
 
-class FishingBiLSTM(nn.Module):
+class FishingLSTM(nn.Module):
     def __init__(self, n_features, hidden=HIDDEN, n_layers=N_LAYERS,
                  dropout=DROPOUT, dense=DENSE):
         super().__init__()
@@ -467,7 +467,7 @@ def predict_and_score_external(model):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seed_results/lstm_seed_results.csv"
+results_csv_path = "multi_seeds_results/lstm_seed_results.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -493,7 +493,7 @@ for seed in SEEDS:
         torch.cuda.manual_seed_all(seed)
 
     # Fresh model / optimizer / scheduler per seed
-    model = FishingBiLSTM(
+    model = FishingLSTM(
         n_features=len(FEATURES),
         hidden=HIDDEN, n_layers=N_LAYERS,
         dropout=DROPOUT, dense=DENSE,
@@ -582,12 +582,12 @@ print(df_res.to_string(index=False))
 
 metric_cols = [
     "int_loss", "int_f1", "int_precision", "int_recall", "int_accuracy",
-    "ext_loss", "ext_f1", "ext_precision", "ext_recall", "ext_accuracy",
+    "ext_loss", "ext_f1", "ext_precision", "ext_recall", "ext_specificity", "ext_accuracy",
 ]
 summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seed_results/lstm_seed_results_summary.csv")
+summary.to_csv("multi_seeds_results/lstm_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seed_results/lstm_seed_results_summary.csv")
+print(f"Summary:       multi_seeds_results/lstm_seed_results_summary.csv")
