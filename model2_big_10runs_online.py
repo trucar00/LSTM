@@ -31,7 +31,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, IterableDataset
-from tqdm import tqdm
+import gc
 
 # ============================================================
 # Config — same loading logic as your training script
@@ -569,6 +569,10 @@ for seed in SEEDS:
 
     # Save incrementally so a crash doesn't lose everything
     pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
+    torch.cuda.synchronize()
+    del model, optimizer, scheduler
+    gc.collect()
+    torch.cuda.empty_cache()
 
 
 # ============================================================
