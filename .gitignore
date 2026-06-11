@@ -4,3 +4,4 @@
 *.pkl
 Data/
 *.tif
+tuning_params/

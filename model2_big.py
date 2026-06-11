@@ -12,7 +12,7 @@ from pathlib import Path
 # Setting of parameters
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path(f"tuning/best_params.json")
+tuned_params_path = Path(f"tuning/best_params_ALL_GEAR.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     
@@ -54,7 +54,7 @@ files = [
     #"three_months/feats_all_w_traps/2024_10_12_feats.parquet"
 ]
 
-BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
+BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"] # removed dist to shore
 
 SEASON_FEATURES = ["month_sin", "month_cos"]
 
@@ -321,7 +321,7 @@ def run_epoch(loader, train: bool):
 # Train
 # ------------------------------------------------------------------
 
-model_name = "models/model_bilstm_tuned_2024_1_3_4_6_ALL_GEAR_OLD_PARAMS.pt"
+model_name = "models/model_bilstm_tuned_2024_1_3_4_6_ALL_GEAR_no_DIST.pt"
 
 best_val = float("inf")
 bad, patience = 0, 3
