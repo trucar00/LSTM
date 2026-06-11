@@ -36,13 +36,13 @@ else:
     BATCH = 128
     LR = 1e-4
 
-BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
+BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"] # dist_to_shore_km
 
 SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-MODEL_PATH = "models/model_bilstm_tuned_2024_1_3_4_6_ALL_GEAR.pt"
+MODEL_PATH = "models/model_bilstm_tuned_2024_1_3_4_6_ALL_GEAR_no_DIST.pt"
 
 # --------------------------------------------------
 # Same model class as training
@@ -77,7 +77,7 @@ class FishingBiLSTM(nn.Module):
 # --------------------------------------------------
 
 
-with open("parameters_2024_1_3_4_6_ALL_GEAR.pkl", "rb") as f:
+with open("parameters_2024_1_3_4_6_ALL_GEAR_no_DIST.pkl", "rb") as f:
     params = pickle.load(f)
 
 mu = params["mu"]
@@ -131,7 +131,8 @@ df_predict["pred_sum"] = 0.0
 df_predict["pred_count"] = 0.0
 
 with torch.no_grad():
-    for traj_id, traj in tqdm(df_predict.groupby("trajectory_id", sort=False)):
+    print("Predicting!")
+    for traj_id, traj in df_predict.groupby("trajectory_id", sort=False):
         idx = traj.index.to_numpy()
         X_all = traj[FEATURES].to_numpy(dtype=np.float32)
 
@@ -177,7 +178,6 @@ df_predict = df_predict.drop(columns=["pred_sum", "pred_count"])
 
 print(df_predict[["trajectory_id", "date_time_utc", "mmsi", "p_fishing", "pred_fishing"]].head())
 print(df_predict["pred_fishing"].value_counts())
-
 
 
 # PRINT OUT STATS
@@ -239,4 +239,8 @@ metrics = {
     "ext_n_pred_no_fish_of_unknown": n_pred_no_fish_of_unknown
 }
 
-print(metrics["ext_accuracy"], metrics["ext_recall"], metrics["ext_f1"], metrics["ext_precision"])
+print("a: ", metrics["ext_accuracy"], "r: ", metrics["ext_recall"], "f1: ", metrics["ext_f1"], "p", metrics["ext_precision"], "spec:", metrics["ext_specificity"])
+
+
+print(df_predict.columns)
+print(df_predict.head())
