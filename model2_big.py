@@ -77,7 +77,7 @@ train_mmsi = set(mmsis[:int(0.70*n)])
 val_mmsi   = set(mmsis[int(0.70*n):int(0.85*n)])
 test_mmsi  = set(mmsis[int(0.85*n):])
 
-mu_sigma_path = Path(f"parameters_2024_1_3_4_6_ALL_GEAR.pkl") # USE CORRECT PARAMETERS
+mu_sigma_path = Path(f"parameters_2024_1_3_4_6_ALL_GEAR_no_DIST.pkl") # USE CORRECT PARAMETERS
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
