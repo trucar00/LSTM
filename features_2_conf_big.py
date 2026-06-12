@@ -31,7 +31,7 @@ def angle_wrap(a):
 # ---------------------------
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
-GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps", "Bur og ruser"]
+GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps"]
 
 
 def column_fixing(df):
@@ -213,10 +213,10 @@ def main(online):
             df = add_features(df, online=online)
             check_feats(df)
             print(df["report"].unique())
-            df.to_parquet(f"three_months/feats_new_rule_online/{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/feats_new_rule_bilstm/{year}_{i}_{i+2}_feats.parquet", index=False)
 
 
 if __name__ == "__main__":
-    #main(online=True)
+    #main(online=False)
     concat()
     #concat2()
