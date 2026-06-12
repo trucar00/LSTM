@@ -15,11 +15,11 @@ STRIDE = 128
 #files = sorted(glob.glob("three_months/feats/*.parquet"))
 
 files = [
-    "three_months/feats_all_w_traps/2024_1_3_feats.parquet",
-    "three_months/feats_all_w_traps/2024_7_9_feats.parquet",
+    "three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet",
+    "three_months/feats_new_rule_bilstm/2024_7_9_feats.parquet",
 ]
 
-BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
+BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
 SEASON_FEATURES = ["month_sin", "month_cos"]
 
@@ -48,7 +48,7 @@ print(len(train_mmsi & test_mmsi))
 print(len(val_mmsi & test_mmsi))
 
 
-mu_sigma_path = Path(f"tuning/parameters_2024_optuna_ALL_GEAR.pkl")
+mu_sigma_path = Path(f"tuning/parameters_2024_optuna_BILSTM_NEW_RULE_NO_DIST.pkl")
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
@@ -235,7 +235,7 @@ def masked_loss(logits, y, mask):
 # ------------------------------------------------------------------
 
 def cache_windows(mmsi_set, name, window, stride):
-    out_path = Path(f"tuning/cache_{name}_w{window}_s{stride}_ALL_GEAR.pt")
+    out_path = Path(f"tuning/cache_{name}_w{window}_s{stride}_BILSTM_NEW_RULE_NO_DIST.pt")
     if out_path.exists():
         print(f"  already cached: {out_path.name}")
         return
@@ -303,8 +303,8 @@ def train_one_config(cfg, trial=None, max_epochs=6):
     torch.manual_seed(42)
 
     # Load cached windows instead of re-reading parquet
-    train_cache = torch.load(f"tuning/cache_train_w{cfg['window']}_s{cfg['stride']}_ALL_GEAR.pt")
-    val_cache   = torch.load(f"tuning/cache_val_w{cfg['window']}_s{cfg['stride']}_ALL_GEAR.pt")
+    train_cache = torch.load(f"tuning/cache_train_w{cfg['window']}_s{cfg['stride']}_BILSTM_NEW_RULE_NO_DIST.pt")
+    val_cache   = torch.load(f"tuning/cache_val_w{cfg['window']}_s{cfg['stride']}_BILSTM_NEW_RULE_NO_DIST.pt")
 
     train_ds = TensorDataset(train_cache["x"], train_cache["y"], train_cache["m"])
     val_ds   = TensorDataset(val_cache["x"],   val_cache["y"],   val_cache["m"])
@@ -384,20 +384,20 @@ def objective(trial):
 
 study = optuna.create_study(
     direction="minimize",
-    study_name="fishing_bilstm_search_ALL_GEAR",
-    storage="sqlite:///tuning/optuna_fishing_ALL_GEAR.db",   # so you can resume / inspect
+    study_name="fishing_BILSTM_NEW_RULE_NO_DIST",
+    storage="sqlite:///tuning/optuna_BILSTM_NEW_RULE_NO_DIST.db",   # so you can resume / inspect
     load_if_exists=True,
     pruner=optuna.pruners.MedianPruner(n_warmup_steps=2, n_startup_trials=5),
     sampler=optuna.samplers.TPESampler(seed=42),
 )
 
-study.optimize(objective, n_trials=4, show_progress_bar=False)
+study.optimize(objective, n_trials=40, show_progress_bar=False)
 
 print("\n=== BEST ===")
 print("val_loss:", study.best_value)
 print("params:  ", study.best_params)
 
 # Persist best params to use later when scaling up
-with open("tuning/best_params_ALL_GEAR.json", "w") as f:
+with open("tuning/best_params_BILSTM_NEW_RULE_NO_DIST.json", "w") as f:
     json.dump({"best_value": study.best_value,
                "best_params": study.best_params}, f, indent=2)
