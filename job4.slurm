@@ -6,7 +6,7 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=tuning/output_optuna_online_NEW_%j.txt    # Log file
+#SBATCH --output=tuning/output_optuna_online_NEW_RULE_NO_DIST_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
