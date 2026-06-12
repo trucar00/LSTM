@@ -2,12 +2,12 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=CPUQ
 ##SBATCH --gres=gpu:1
-#SBATCH --time=2:00:00
+#SBATCH --time=5:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=96G             # GB memory
-#SBATCH --output=three_months/all_gear_new_rule/output_%j.txt    # Log file
-#SBATCH --job-name=concat_confident_labeled_2024_new_rules
+#SBATCH --output=three_months/feats_new_rule_online/output_%j.txt    # Log file
+#SBATCH --job-name=feats_2024_new_rule_online
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

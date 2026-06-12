@@ -31,7 +31,7 @@ def angle_wrap(a):
 # ---------------------------
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
-GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps"]
+GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps", "Bur og ruser"]
 
 
 def column_fixing(df):
@@ -205,18 +205,18 @@ def concat2():
         all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}.parquet", index=False)
 
 def main(online):
-    for year in range(2025, 2025+1):
+    for year in range(2024, 2024+1):
         for i in range(1, 12+1, 3):
-            df = pd.read_parquet(f"three_months/all_gear2/{year}_{i}_{i+2}.parquet", engine="pyarrow")
+            df = pd.read_parquet(f"three_months/all_gear_new_rule/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
             df = add_features(df, online=online)
             check_feats(df)
             print(df["report"].unique())
-            df.to_parquet(f"three_months/feats_all_w_traps_online/{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/feats_new_rule_online/{year}_{i}_{i+2}_feats.parquet", index=False)
 
 
 if __name__ == "__main__":
-    #main(online=True)
-    concat()
+    main(online=True)
+    #concat()
     #concat2()
