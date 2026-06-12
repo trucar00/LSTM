@@ -31,7 +31,7 @@ def angle_wrap(a):
 # ---------------------------
 
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
-GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps", "Bur og ruser"]
+GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps"]
 
 
 def column_fixing(df):
