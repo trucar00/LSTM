@@ -2,12 +2,12 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=CPUQ
 ##SBATCH --gres=gpu:1
-#SBATCH --time=1:00:00
+#SBATCH --time=4:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=96G             # GB memory
-#SBATCH --output=three_months/all_gear_new_rule/output_%j.txt    # Log file
-#SBATCH --job-name=concat_2025_new_rule
+#SBATCH --output=three_months/feats_new_rule_bilstm/output_%j.txt    # Log file
+#SBATCH --job-name=feats_bilstm_new_rules
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
