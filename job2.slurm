@@ -7,6 +7,7 @@
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=96G             # GB memory
 #SBATCH --output=three_months/all_gear_new_rule/output_%j.txt    # Log file
+#SBATCH --job-name=concat_confident_labeled_2024_new_rules
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

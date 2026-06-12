@@ -185,10 +185,10 @@ def check_speed(df):
 def concat():
     for i in range(1, 12+1, 3):
         
-        for year in range(2023, 2025+1):
+        for year in range(2024, 2024+1):
             dfs = []
             for gear in GEAR:
-                df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident_new_rule/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
+                df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident_new_rule_new_duration/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
                 dfs.append(df)
         
             all_gear_full_month_df = pd.concat(dfs, ignore_index=True)
