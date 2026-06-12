@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=GPUQ
-#SBATCH --gres=gpu:1
-#SBATCH --time=4:00:00
+#SBATCH --partition=CPUQ
+##SBATCH --gres=gpu:1
+#SBATCH --time=2:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=96G             # GB memory
-#SBATCH --output=multi_seeds_results/output_seeds_bilstm_%j.txt    # Log file
+#SBATCH --output=three_months/all_gear_new_rule/output_%j.txt    # Log file
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -36,4 +36,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u model2_big_10runs.py
+python -u features_2_conf_big.py
