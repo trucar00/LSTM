@@ -38,7 +38,7 @@ import gc
 # ============================================================
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path("tuning/best_params_online_NEW_ALL_GEAR.json")
+tuned_params_path = Path("tuning/best_params_LSTM_NEW_RULE_NO_DIST.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -65,19 +65,19 @@ else:
     best_params = None
 
 files = [
-    "three_months/feats_all_w_traps_online/2024_1_3_feats.parquet",
-    "three_months/feats_all_w_traps_online/2024_4_6_feats.parquet",
+    "three_months/feats_new_rule_online/2024_1_3_feats.parquet",
+    "three_months/feats_new_rule_online/2024_4_6_feats.parquet",
 ]
 
-EXTERNAL_TEST_FILE = "three_months/feats_all_w_traps_online/2025_1_3_feats.parquet"
+EXTERNAL_TEST_FILE = "three_months/feats_new_rule_online/2025_1_3_feats.parquet"
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk",
-                 "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
+                 "log_dist", "ra_dcog", "log_dt"]
 SEASON_FEATURES = ["month_sin", "month_cos"]
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-#SEEDS = [0, 1]
+#SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+SEEDS = [0, 1, 2, 3, 4, 5]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
@@ -103,7 +103,7 @@ test_mmsi  = set(mmsis[int(0.85 * n):])
 # Normalization stats
 # ============================================================
 
-mu_sigma_path = Path("parameters_2024_1_3_4_6_ALL_GEAR_online.pkl")
+mu_sigma_path = Path("parameters_2024_1_3_4_6_LSTM_NEW_RULE_NO_DIST.pkl")
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
@@ -466,7 +466,7 @@ def predict_and_score_external(model):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seeds_results/lstm_seed_results.csv"
+results_csv_path = "multi_seeds_results/LSTM_seed_results_NEW_RULE_NO_DIST.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -501,7 +501,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/seed/model_lstm_seed{seed}.pt"
+    model_name = f"models/seed/model_lstm_seed{seed}_NEW_RULE_NO_DIST.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -520,7 +520,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_lstm_seed{seed}.csv", index=False
+            f"training_stats/training_history_lstm_seed{seed}_NEW_RULE_NO_DIST.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
@@ -591,6 +591,6 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seeds_results/lstm_seed_results_summary.csv")
+summary.to_csv("multi_seeds_results/lstm_seed_results_summary_NEW_RULE_NO_DIST.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seeds_results/lstm_seed_results_summary.csv")
+print(f"Summary:       multi_seeds_results/lstm_seed_results_summary_NEW_RULE_NO_DIST.csv")

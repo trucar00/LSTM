@@ -2,11 +2,12 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=03:30:00
+#SBATCH --time=12:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=64G             # GB memory
-#SBATCH --output=predictions/output_bilstm_tuned_2025_1_3_no_DIST_%j.txt    # Log file
+#SBATCH --mem=128G             # GB memory
+#SBATCH --output=multi_seeds_result/output_LSTM_NEW_RULE_NO_DIST_%j.txt    # Log file
+#SBATCH --job-name=SEED_LSTM_NEW_RULE_NO_DIST
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -36,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u predict_big.py
+python -u model2_big_10runs_online.py

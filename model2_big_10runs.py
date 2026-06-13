@@ -66,19 +66,19 @@ else:
     best_params = None
 
 files = [
-    "three_months/feats_new_gear_online/2024_1_3_feats.parquet",
-    "three_months/feats_new_gear_online/2024_4_6_feats.parquet",
+    "three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet",
+    "three_months/feats_new_rule_bilstm/2024_4_6_feats.parquet",
 ]
 
-EXTERNAL_TEST_FILE = "three_months/feats_new_gear_online/2025_1_3_feats.parquet"
+EXTERNAL_TEST_FILE = "three_months/feats_new_rule_bilstm/2025_1_3_feats.parquet"
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk",
-                 "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
+                 "log_dist", "ra_dcog", "log_dt"]
 SEASON_FEATURES = ["month_sin", "month_cos"]
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-#SEEDS = [8, 9]
+#SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+SEEDS = [0, 1, 2, 3, 4, 5]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
@@ -104,7 +104,7 @@ test_mmsi  = set(mmsis[int(0.85 * n):])
 # Normalization stats
 # ============================================================
 
-mu_sigma_path = Path("parameters_2024_1_3_4_6_NEW_RULE_BILSTM_NO_DIST.pkl")
+mu_sigma_path = Path("parameters_2024_1_3_4_6_BILSTM_NEW_RULE_NO_DIST.pkl")
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
