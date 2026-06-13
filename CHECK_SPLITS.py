@@ -74,7 +74,7 @@ files = [
 
 # Load MMSI and report information
 split_df = pd.concat(
-    [pd.read_parquet(f, columns=["mmsi", "report"]) for f in files],
+    [pd.read_parquet(f, columns=["mmsi", "gear_report"]) for f in files],
     ignore_index=True,
 )
 
