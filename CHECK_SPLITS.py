@@ -72,97 +72,6 @@ files = [
     "three_months/feats_new_rule_bilstm/2024_10_12_feats.parquet",
 ]
 
-# Load MMSI and report information
-split_df = pd.concat(
-    [pd.read_parquet(f, columns=["mmsi", "gear_report"]) for f in files],
-    ignore_index=True,
-)
-
-gear_types = [
-    "Trål",
-    "Not",
-    "Snurrevad",
-    "Krokredskap",
-    "Garn",
-    "Bur og ruser",
-]
-
-# One row per MMSI, one binary column per gear type
-mmsi_labels = (
-    split_df[split_df["gear_report"].isin(gear_types)]
-    .drop_duplicates(["mmsi", "gear_report"])
-    .assign(value=1)
-    .pivot_table(
-        index="mmsi",
-        columns="gear_report",
-        values="value",
-        fill_value=0,
-    )
-    .reindex(columns=gear_types, fill_value=0)
-)
-
-# Include MMSIs that only have no-fishing observations
-all_mmsis = split_df["mmsi"].drop_duplicates()
-mmsi_labels = mmsi_labels.reindex(all_mmsis, fill_value=0)
-
-
-def find_valid_split(
-    mmsi_labels,
-    train_fraction=0.70,
-    val_fraction=0.15,
-    min_val_per_gear=2,
-    min_test_per_gear=2,
-    max_attempts=100_000,
-):
-    mmsis = mmsi_labels.index.to_numpy()
-    n = len(mmsis)
-
-    n_train = int(train_fraction * n)
-    n_val = int(val_fraction * n)
-
-    for seed in range(max_attempts):
-        rng = np.random.default_rng(seed)
-        shuffled = rng.permutation(mmsis)
-
-        train = shuffled[:n_train]
-        val = shuffled[n_train:n_train + n_val]
-        test = shuffled[n_train + n_val:]
-
-        val_counts = mmsi_labels.loc[val].sum()
-        test_counts = mmsi_labels.loc[test].sum()
-
-        valid_val = (val_counts >= min_val_per_gear).all()
-        valid_test = (test_counts >= min_test_per_gear).all()
-
-        if valid_val and valid_test:
-            return (
-                set(train),
-                set(val),
-                set(test),
-                seed,
-                val_counts,
-                test_counts,
-            )
-
-    raise RuntimeError(
-        f"No valid split found after {max_attempts} attempts."
-    )
-
-
-train_mmsi, val_mmsi, test_mmsi, split_seed, val_counts, test_counts = (
-    find_valid_split(
-        mmsi_labels,
-        min_val_per_gear=2,
-        min_test_per_gear=2,
-    )
-)
-
-print("Selected split seed:", split_seed)
-print("\nValidation vessels per gear:")
-print(val_counts)
-print("\nTest vessels per gear:")
-print(test_counts)
-
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk",
                  "log_dist", "ra_dcog", "log_dt"]
 SEASON_FEATURES = ["month_sin", "month_cos"]
@@ -184,7 +93,7 @@ for f in files:
     all_mmsis.update(m)
 
 mmsis = np.array(list(all_mmsis))
-split_rng = np.random.default_rng(split_seed)
+split_rng = np.random.default_rng(5)
 split_rng.shuffle(mmsis)
 n = len(mmsis)
 train_mmsi = set(mmsis[:int(0.70 * n)])
