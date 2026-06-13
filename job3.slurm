@@ -37,4 +37,5 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u lstm_optuna_q1_q2.py
+python -u features_2_conf_big.py
+python -u lstm_optuna_q1_q1.py
