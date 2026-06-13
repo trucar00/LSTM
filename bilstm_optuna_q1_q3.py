@@ -13,14 +13,14 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "BILSTM_NEW_RULE_NO_DIST_Q1train_Q2val"
+TAG = "BILSTM_NEW_RULE_NO_DIST_Q1train_Q3val"
 FOLDER = "tuning_temporal"
 
 # ------------------------------------------------------------------
-# Temporal split: Q1 -> train, Q2 -> val
+# Temporal split: Q1 -> train, Q3 -> val
 # ------------------------------------------------------------------
 TRAIN_FILES = ["three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet"]  # Q1 2024
-VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_7_9_feats.parquet"]  # Q2 2024
+VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_7_9_feats.parquet"]  # Q3 2024
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
@@ -37,7 +37,7 @@ def all_mmsis_in(files):
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
 train_mmsi = all_mmsis_in(TRAIN_FILES)
 val_mmsi   = all_mmsis_in(VAL_FILES)
-print(f"Train (Q1) vessels: {len(train_mmsi)} | Val (Q2) vessels: {len(val_mmsi)}")
+print(f"Train (Q1) vessels: {len(train_mmsi)} | Val (Q3) vessels: {len(val_mmsi)}")
 print(f"Vessels present in both quarters (expected, fine): "
       f"{len(train_mmsi & val_mmsi)}")
 
@@ -192,7 +192,7 @@ def masked_loss(logits, y, mask):
     return (per * m).sum() / m.sum().clamp_min(1.0)
 
 # ------------------------------------------------------------------
-# Caching: train caches come from Q1, val caches from Q2
+# Caching: train caches come from Q1, val caches from Q3
 # ------------------------------------------------------------------
 def cache_windows(files, mmsi_set, name, window, stride):
     out_path = Path(f"{FOLDER}/cache_{name}_w{window}_s{stride}_{TAG}.pt")
