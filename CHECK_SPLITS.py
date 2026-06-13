@@ -152,8 +152,8 @@ def find_valid_split(
 train_mmsi, val_mmsi, test_mmsi, split_seed, val_counts, test_counts = (
     find_valid_split(
         mmsi_labels,
-        min_val_per_gear=1,
-        min_test_per_gear=1,
+        min_val_per_gear=2,
+        min_test_per_gear=2,
     )
 )
 
