@@ -437,9 +437,6 @@ def predict_and_score_test(model):
     rep_fish = report == "fishing"
     rep_conf = report == "conf_no_fishing"
 
-    del df
-    gc.collect()
-
     n_reported_fish = int(np.sum(rep_fish))
     n_reported_conf_no_fish = int(np.sum(rep_conf))
 
@@ -473,9 +470,13 @@ def predict_and_score_test(model):
             (df["sample_weight"] == 1)
             & df["p_fishing"].notna()
         )
+    
 
     y_true = df.loc[eval_mask, "y_train"].to_numpy(dtype=int)
     y_prob = df.loc[eval_mask, "p_fishing"].to_numpy()
+
+    del df
+    gc.collect()
 
     test_logloss = log_loss(
         y_true,
