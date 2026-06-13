@@ -89,12 +89,12 @@ gear_types = [
 
 # One row per MMSI, one binary column per gear type
 mmsi_labels = (
-    split_df[split_df["report"].isin(gear_types)]
-    .drop_duplicates(["mmsi", "report"])
+    split_df[split_df["gear_report"].isin(gear_types)]
+    .drop_duplicates(["mmsi", "gear_report"])
     .assign(value=1)
     .pivot_table(
         index="mmsi",
-        columns="report",
+        columns="gear_report",
         values="value",
         fill_value=0,
     )
@@ -110,8 +110,8 @@ def find_valid_split(
     mmsi_labels,
     train_fraction=0.70,
     val_fraction=0.15,
-    min_val_per_gear=1,
-    min_test_per_gear=1,
+    min_val_per_gear=2,
+    min_test_per_gear=2,
     max_attempts=100_000,
 ):
     mmsis = mmsi_labels.index.to_numpy()
