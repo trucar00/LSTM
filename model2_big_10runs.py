@@ -77,8 +77,8 @@ BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk",
 SEASON_FEATURES = ["month_sin", "month_cos"]
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-#SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-SEEDS = [0, 1, 2, 3, 4, 5]
+SEEDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+#SEEDS = [0, 1, 2, 3, 4, 5]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
