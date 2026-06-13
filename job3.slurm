@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=CPUQ
-##SBATCH --gres=gpu:1
-#SBATCH --time=1:30:00
+#SBATCH --gres=gpu:1
+#SBATCH --time=8:30:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=NEW_SPLIT/output_checksplit_%j.txt    # Log file
-##SBATCH --job-name=ptuna_BILSTM_NEW_RULE_NO_DIST
+#SBATCH --output=NEW_SPLIT/output_seeds_bilstm_%j.txt    # Log file
+#SBATCH --job-name=BILSTM_INternal_test_seeds
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

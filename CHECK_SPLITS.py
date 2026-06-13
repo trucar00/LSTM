@@ -25,7 +25,7 @@ import os
 import json
 import pickle
 from pathlib import Path
-
+from sklearn.metrics import log_loss
 import numpy as np
 import pandas as pd
 import torch
@@ -139,13 +139,11 @@ mmsis_per_gear["Total"] = mmsis_per_gear[
 
 print(mmsis_per_gear)
 
-exit()
-
 # ============================================================
 # Normalization stats
 # ============================================================
 
-mu_sigma_path = Path("parameters_2024_1_3_4_6_BILSTM_NEW_RULE_NO_DIST.pkl")
+mu_sigma_path = Path("NEW_SPLIT/parameters_2024_BILSTM.pkl")
 if mu_sigma_path.exists():
     print(f"Loading mu/sigma from {mu_sigma_path}")
     with open(mu_sigma_path, "rb") as f:
@@ -274,6 +272,7 @@ train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
                           drop_last=True)
 val_loader  = DataLoader(val_ds,  batch_size=BATCH, shuffle=False,
                          num_workers=0, pin_memory=False)
+
 test_loader = DataLoader(test_ds, batch_size=BATCH, shuffle=False,
                          num_workers=0, pin_memory=False)
 
@@ -351,32 +350,36 @@ def run_epoch(model, loader, optimizer=None, train=False):
 # (mu/sigma are seed-independent, so this is safe)
 # ============================================================
 
-print(f"Preparing external test set: {EXTERNAL_TEST_FILE}")
-df_ext_base = pd.read_parquet(EXTERNAL_TEST_FILE)
+print(f"Preparing test set")
 
-# Load the external test set for finding the loss
-ext_mmsi = set(df_ext_base["mmsi"].unique())
-ext_ds = AISWindowDataset(
-    [EXTERNAL_TEST_FILE], ext_mmsi, FEATURES, mu, sigma,
-    stride=STRIDE, window=WINDOW,
+test_mmsi_list = list(test_mmsi)
+
+df_test = pd.concat(
+    [
+        pd.read_parquet(
+            f,
+            filters=[("mmsi", "in", test_mmsi_list)],
+            engine="pyarrow",
+        )
+        for f in files
+    ],
+    ignore_index=True,
 )
-ext_loader = DataLoader(ext_ds, batch_size=BATCH, shuffle=False,
-                        num_workers=0, pin_memory=False)
 
-df_ext_base["date_time_utc"] = pd.to_datetime(df_ext_base["date_time_utc"])
-_month = df_ext_base["date_time_utc"].dt.month
-df_ext_base["month_sin"] = np.sin(2 * np.pi * _month / 12)
-df_ext_base["month_cos"] = np.cos(2 * np.pi * _month / 12)
+df_test["date_time_utc"] = pd.to_datetime(df_test["date_time_utc"])
+_month = df_test["date_time_utc"].dt.month
+df_test["month_sin"] = np.sin(2 * np.pi * _month / 12)
+df_test["month_cos"] = np.cos(2 * np.pi * _month / 12)
 for col in FEATURES:
-    df_ext_base[col] = (df_ext_base[col] - mu[col]) / sigma[col]
-df_ext_base["ra_accel"] = df_ext_base["ra_accel"].clip(-5, 5)
-df_ext_base["ra_jerk"]  = df_ext_base["ra_jerk"].clip(-5, 5)
-df_ext_base["ra_dcog"]  = df_ext_base["ra_dcog"].clip(-5, 5)
-df_ext_base = df_ext_base.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
+    df_test[col] = (df_test[col] - mu[col]) / sigma[col]
+df_test["ra_accel"] = df_test["ra_accel"].clip(-5, 5)
+df_test["ra_jerk"]  = df_test["ra_jerk"].clip(-5, 5)
+df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
+df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
 
 
 
-def predict_and_score_external(model):
+def predict_and_score_test(model):
     """Run overlapping-window prediction on the pre-normalized 2025 frame,
     average overlapping predictions, then score using the `report` column.
 
@@ -388,7 +391,7 @@ def predict_and_score_external(model):
                         count as false positives in the denominator)
       - f1:            harmonic mean of precision and recall above
     """
-    df = df_ext_base.copy()
+    df = df_test.copy()
     df["pred_sum"]   = 0.0
     df["pred_count"] = 0.0
 
@@ -451,21 +454,6 @@ def predict_and_score_external(model):
     n_pred_fish_of_unknown    = int(np.sum(pred_fishing & rep_unknown))
     n_pred_no_fish_of_unknown = int(np.sum(~pred_fishing & rep_unknown))
 
-
-    # True positives (TP) of labeled
-    #pred_pos_df = df[df["pred_fishing"] == 1]
-    #tp = int((pred_pos_df["report"] == "fishing").sum())
-
-    # False positives (FP) of labeled
-    #fp = int((pred_pos_df["report"] == "conf_no_fishing").sum())
-
-    # True negatives (TN) of labeled
-    #pred_neg_df = df[df["pred_fishing"] == 0]
-    #tn = int((pred_neg_df["report"] == "conf_no_fishing").sum())
-
-    # False negatives (FN) of labeled
-    #fn = int((pred_neg_df["report"] == "fishing").sum())
-
     # Precision of confirmed.
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
 
@@ -481,39 +469,39 @@ def predict_and_score_external(model):
     # F1 Score
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
-    # Number of predictions for each class
-    #n_pred_fish = int((df["pred_fishing"] == 1).sum())
-    #n_pred_no_fish = int((df["pred_fishing"] == 0).sum())
+    eval_mask = (
+            (df["sample_weight"] == 1)
+            & df["p_fishing"].notna()
+        )
 
-    # Number of reports for each class
-    #n_reported_fish = int((df["report"] == "fishing").sum())
-    #n_reported_conf_no_fish = int((df["report"] == "conf_no_fishing").sum())
+    y_true = df.loc[eval_mask, "y_train"].to_numpy(dtype=int)
+    y_prob = df.loc[eval_mask, "p_fishing"].to_numpy()
 
-    # Number of unknowns
-    #unknown_df = df[df["report"] == "unknown"]
-    #n_unknown = int(len(unknown_df))
-
-    #n_pred_fish_of_unknown = int((unknown_df["pred_fishing"] == 1).sum())
-    #n_pred_no_fish_of_unknown = int((unknown_df["pred_fishing"] == 0).sum())
+    test_logloss = log_loss(
+        y_true,
+        y_prob,
+        labels=[0, 1],
+    )
 
 
     return {
-        "ext_tp":                  tp,
-        "ext_fp":                  fp,
-        "ext_tn":                  tn,
-        "ext_fn":                  fn,
-        "ext_accuracy":            accuracy,
-        "ext_recall":              recall,
-        "ext_specificity":         specificity,
-        "ext_precision":           precision,           
-        "ext_f1":                  f1,
-        "ext_n_pred_fish":         n_pred_fish,
-        "ext_n_pred_no_fish":      n_pred_no_fish,
-        "ext_n_reported_fish":     n_reported_fish,
-        "ext_n_reported_no_fish":  n_reported_conf_no_fish,
-        "ext_n_unknowns":          n_unknown,
-        "ext_n_pred_fish_of_unknown": n_pred_fish_of_unknown,
-        "ext_n_pred_no_fish_of_unknown": n_pred_no_fish_of_unknown
+        "tp":                  tp,
+        "fp":                  fp,
+        "tn":                  tn,
+        "fn":                  fn,
+        "accuracy":            accuracy,
+        "recall":              recall,
+        "specificity":         specificity,
+        "precision":           precision,           
+        "f1":                  f1,
+        "logloss":             test_logloss,
+        "n_pred_fish":         n_pred_fish,
+        "n_pred_no_fish":      n_pred_no_fish,
+        "n_reported_fish":     n_reported_fish,
+        "n_reported_no_fish":  n_reported_conf_no_fish,
+        "n_unknowns":          n_unknown,
+        "n_pred_fish_of_unknown": n_pred_fish_of_unknown,
+        "n_pred_no_fish_of_unknown": n_pred_no_fish_of_unknown
     }
 
 
@@ -521,7 +509,7 @@ def predict_and_score_external(model):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seeds_results/bilstm_seed_results_NEW_RULE_NO_DIST.csv"
+results_csv_path = "NEW_SPLIT/bilstm_seed_results.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -556,7 +544,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/seed/model_bilstm_seed{seed}_NEW_RULE_NO_DIST.pt"
+    model_name = f"NEW_SPLIT/models/model_bilstm_seed{seed}.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -575,7 +563,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_bilstm_seed{seed}_NEW_RULE_NO_DIST.csv", index=False
+            f"NEW_SPLIT/training_history_bilstm_seed{seed}.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
@@ -597,31 +585,26 @@ for seed in SEEDS:
           f"f1 {te[3]:.3f} acc {te[4]:.3f}")
     
     # External loss
-    te_ext = run_epoch(model, ext_loader, train=False)
-    print(f"[seed {seed}] EXTERNAL LOSS | loss {te_ext[0]:.4f}")
     # External 2025_1_3 test — the metric that matters
     
-    print("Predicting ", EXTERNAL_TEST_FILE)
-    ext = predict_and_score_external(model)
-    print(f"[seed {seed}] EXTERNAL 2025 | "
-          f"precision {ext['ext_precision']:.3f} "
-          f"recall {ext['ext_recall']:.3f} "
-          f"specificity {ext['ext_specificity']:.3f} "
-          f"f1 {ext['ext_f1']:.3f} "
-          f"accuracy {ext['ext_accuracy']:.3f} ")
+    print("Predicting on test set")
+    test_metrics = predict_and_score_test(model)
+    print(f"[seed {seed}] TEST SET 15% of fishing vessels in 2024 | "
+          f"precision {test_metrics['precision']:.3f} "
+          f"recall {test_metrics['recall']:.3f} "
+          f"specificity {test_metrics['specificity']:.3f} "
+          f"f1 {test_metrics['f1']:.3f} "
+          f"accuracy {test_metrics['accuracy']:.3f} "
+          f"logloss {test_metrics['logloss']:.3f} ")
 
     row = {
         "seed": seed,
         "best_val_loss": best_val,
         "epochs_trained": len(history),
-        "int_loss":      te[0],
-        "int_precision": te[1],
-        "int_recall":    te[2],
-        "int_f1":        te[3],
-        "int_accuracy":  te[4],
-        "ext_loss":      te_ext[0],
-        **ext,
+        "int_window_loss": te[0],
+        **test_metrics,
     }
+    
     all_results.append(row)
 
     # Save incrementally so a crash doesn't lose everything
@@ -640,13 +623,12 @@ print("\n========== SUMMARY ==========")
 print(df_res.to_string(index=False))
 
 metric_cols = [
-    "int_loss", "int_f1", "int_precision", "int_recall", "int_accuracy",
-    "ext_loss", "ext_f1", "ext_precision", "ext_recall", "ext_specificity", "ext_accuracy",
+    "int_window_loss", "f1", "precision", "recall", "specificity", "accuracy", "logloss"
 ]
 summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seeds_results/bilstm_seed_results_summary_NEW_RULE_NO_DIST.csv")
+summary.to_csv("NEW_SPLIT/bilstm_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seeds_results/bilstm_seed_results_summary_NEW_RULE_NO_DIST.csv")
+print(f"Summary:       NEW_SPLIT/bilstm_seed_results_summary.csv")
