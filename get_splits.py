@@ -18,7 +18,7 @@ for f in files:
     m = pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique()
     all_mmsis.update(m)
 
-mmsis = np.array(sorted(all_mmsis), dtype=np.int64)
+mmsis = np.array(list(all_mmsis))
 split_rng = np.random.default_rng(5)
 split_rng.shuffle(mmsis)
 
