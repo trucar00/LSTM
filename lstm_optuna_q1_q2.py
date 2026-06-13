@@ -13,7 +13,7 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "LSTM_Q1train_Q3val"
+TAG = "LSTM_Q1train_Q2val"
 FOLDER = "tuning_temporal"
 
 print("--------", TAG, "----------")

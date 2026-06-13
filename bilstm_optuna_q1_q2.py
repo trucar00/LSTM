@@ -13,8 +13,10 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "BILSTM_Q1train_Q3val"
+TAG = "BILSTM_Q1train_Q2val"
 FOLDER = "tuning_temporal"
+
+print("--------", TAG, "----------")
 
 # ------------------------------------------------------------------
 # Temporal split: Q1 -> train, Q3 -> val
