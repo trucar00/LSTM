@@ -39,7 +39,7 @@ import gc
 # ============================================================
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path("best_params_BILSTM_NEW_RULE_NO_DIST.json")
+tuned_params_path = Path("tuning/best_params_BILSTM_NEW_RULE_NO_DIST.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
