@@ -13,14 +13,14 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "BILSTM_NEW_RULE_NO_DIST_Q1train_Q3val"
+TAG = "BILSTM_Q1train_Q3val"
 FOLDER = "tuning_temporal"
 
 # ------------------------------------------------------------------
 # Temporal split: Q1 -> train, Q3 -> val
 # ------------------------------------------------------------------
 TRAIN_FILES = ["three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet"]  # Q1 2024
-VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_7_9_feats.parquet"]  # Q3 2024
+VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_4_6_feats.parquet"]  # Q3 2024
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
@@ -321,7 +321,7 @@ def objective(trial):
         "batch":    trial.suggest_categorical("batch", [64, 128, 256]),
         "lr":       trial.suggest_float("lr", 1e-5, 1e-3, log=True),
         "window":   trial.suggest_categorical("window", [128, 256]),
-        "stride":   trial.suggest_categorical("stride", [64, 128]),
+        "stride":   trial.suggest_categorical("stride", [64, 128, 256]),
         "dense":    trial.suggest_categorical("dense", [32, 64, 128]),
     }
     if cfg["stride"] not in (cfg["window"] // 2, cfg["window"]):

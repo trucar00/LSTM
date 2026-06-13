@@ -6,7 +6,7 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=tuning_temporal/output_optuna_BISTLM_Q1_Q3_%j.txt    # Log file
+#SBATCH --output=tuning_temporal/output_optuna_BILSTM_Q1_Q3_%j.txt    # Log file
 #SBATCH --job-name=optuna_BILSTM_temporal_split
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
@@ -37,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u bilstm_optuna_q1_q3.py
+python -u bilstm_optuna_q1_q2.py
