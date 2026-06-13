@@ -13,7 +13,7 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "BILSTM_Q2-23_train_Q2-24_val"
+TAG = "BILSTM_Q1-23_train_Q1-24_val"
 FOLDER = "tuning_temporal"
 
 print("--------", TAG, "----------")
@@ -21,8 +21,8 @@ print("--------", TAG, "----------")
 # ------------------------------------------------------------------
 # Temporal split: Q1 -> train, Q3 -> val
 # ------------------------------------------------------------------
-TRAIN_FILES = ["three_months/feats_new_rule_bilstm/2023_4_6_feats.parquet"]  # Q2 2023
-VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_4_6_feats.parquet"]  # Q2 2024
+TRAIN_FILES = ["three_months/feats_new_rule_bilstm/2023_1_3_feats.parquet"]  # Q2 2023
+VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet"]  # Q2 2024
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
