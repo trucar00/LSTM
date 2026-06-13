@@ -213,7 +213,7 @@ def cache_windows(files, mmsi_set, name, window, stride):
 print("Building caches...")
 # Only the (window, stride) combos the search can actually use
 # (stride > window // 2 is pruned in the objective).
-for w, s in [(128, 64), (256, 64), (256, 128)]:
+for w, s in [(128, 64), (128, 128), (256, 128), (256, 256)]:
     cache_windows(TRAIN_FILES, train_mmsi, "train", w, s)
     cache_windows(VAL_FILES,   val_mmsi,   "val",   w, s)
 print("Caches ready.\n")
@@ -324,7 +324,7 @@ def objective(trial):
         "stride":   trial.suggest_categorical("stride", [64, 128]),
         "dense":    trial.suggest_categorical("dense", [32, 64, 128]),
     }
-    if cfg["stride"] > cfg["window"] // 2:
+    if cfg["stride"] not in (cfg["window"] // 2, cfg["window"]):
         raise optuna.TrialPruned()
     print(f"\nTrial {trial.number}: {cfg}")
     best = train_one_config(cfg, trial=trial, max_epochs=6)
