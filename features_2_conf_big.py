@@ -184,9 +184,9 @@ def check_speed(df):
 
 
 def concat():
-    for i in range(1, 12+1, 3):
+    for i in range(1, 3+1, 3):
         
-        for year in range(2025, 2025+1):
+        for year in range(2023, 2023+1):
             dfs = []
             for gear in CONCAT_GEAR:
                 df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/confident_new_rule_new_duration/{gear}_{year}_{i}_{i+2}.parquet", engine="pyarrow")
@@ -206,8 +206,8 @@ def concat2():
         all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}.parquet", index=False)
 
 def main(online):
-    for year in range(2025, 2025+1):
-        for i in range(1, 12+1, 3):
+    for year in range(2023, 2023+1):
+        for i in range(1, 3+1, 3):
             df = pd.read_parquet(f"three_months/all_gear_new_rule/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
@@ -218,7 +218,7 @@ def main(online):
             # CHANFE CHANFE ACCORDING TO WHAT TYPE
 
 if __name__ == "__main__":
-    #concat()
+    concat()
     main(online=False)
     
     #concat2()
