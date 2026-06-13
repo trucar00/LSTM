@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=CPUQ
+#SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
 #SBATCH --time=8:30:00
 #SBATCH --nodes=1             # 1 compute nodes
