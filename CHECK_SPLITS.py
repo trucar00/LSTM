@@ -103,7 +103,7 @@ test_mmsi  = set(mmsis[int(0.85 * n):])
 # Read only the necessary columns
 split_df = pd.concat(
     [
-        pd.read_parquet(f, columns=["mmsi", "report"])
+        pd.read_parquet(f, columns=["mmsi", "gear_report"])
         for f in files
     ],
     ignore_index=True,
@@ -127,7 +127,7 @@ split_df["split"] = np.select(
 # Number of unique MMSIs per gear type and split
 mmsis_per_gear = (
     split_df
-    .groupby(["report", "split"])["mmsi"]
+    .groupby(["gear_report", "split"])["mmsi"]
     .nunique()
     .unstack(fill_value=0)
     .reindex(columns=["Train", "Validation", "Test"], fill_value=0)
