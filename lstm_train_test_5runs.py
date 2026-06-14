@@ -64,7 +64,7 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4]
+SEEDS = [0, 1]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
@@ -111,6 +111,8 @@ else:
         sum_x  += x.sum()
         sum_x2 += (x ** 2).sum()
         count  += len(x)
+        del df, x, month
+        gc.collect()
     mu = sum_x / count
     sigma = np.sqrt((sum_x2 / count) - mu ** 2).replace(0, 1)
     with open(mu_sigma_path, "wb") as f:
@@ -209,8 +211,6 @@ train_ds = AISWindowDataset(TRAIN_FILES, train_mmsi, FEATURES, mu, sigma,
                             shuffle_files=True, stride=STRIDE, window=WINDOW)
 val_ds   = AISWindowDataset(VAL_TEST_FILES, val_mmsi, FEATURES, mu, sigma,
                             stride=STRIDE, window=WINDOW)
-test_ds  = AISWindowDataset(VAL_TEST_FILES, test_mmsi, FEATURES, mu, sigma,
-                            stride=STRIDE, window=WINDOW)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
                           num_workers=0,
@@ -218,8 +218,7 @@ train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
                           drop_last=True)
 val_loader  = DataLoader(val_ds,  batch_size=BATCH, shuffle=False,
                          num_workers=0, pin_memory=False)
-test_loader = DataLoader(test_ds, batch_size=BATCH, shuffle=False,
-                         num_workers=0, pin_memory=False)
+
 
 if torch.cuda.is_available():
     print("Cuda available.")
@@ -237,6 +236,8 @@ for f in TRAIN_FILES:
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
     neg += (df_tmp["y_train"] == 0).sum()
     pos += (df_tmp["y_train"] == 1).sum()
+    del df_tmp
+    gc.collect()
 
 pos_weight = torch.tensor([neg / max(pos, 1)], device=device, dtype=torch.float32)
 print("pos_weight:", pos_weight.item())
@@ -298,16 +299,31 @@ test_mmsi_list = list(test_mmsi)
 
 print(f"Preparing test set: {VAL_TEST_FILES}")
 
+TEST_COLUMNS = list(dict.fromkeys([
+    "mmsi",
+    "trajectory_id",
+    "date_time_utc",
+    "y_train",
+    "sample_weight",
+    "report",
+    *BASE_FEATURES,
+]))
+
 dfs = []
+
 for f in VAL_TEST_FILES:
     df_part = pd.read_parquet(
         f,
         engine="pyarrow",
-        filters=[("mmsi", "in", test_mmsi_list)]
+        columns=TEST_COLUMNS,
+        filters=[("mmsi", "in", test_mmsi_list)],
     )
     dfs.append(df_part)
 
-df_test = pd.concat(dfs, ignore_index=True)
+df_test = pd.concat(dfs, ignore_index=True, copy=False)
+
+del dfs, df_part
+gc.collect()
 
 # Load the test set for finding the loss
 
@@ -322,36 +338,26 @@ df_test["ra_accel"] = df_test["ra_accel"].clip(-5, 5)
 df_test["ra_jerk"]  = df_test["ra_jerk"].clip(-5, 5)
 df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
 df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
+df_test[FEATURES] = df_test[FEATURES].astype(np.float32)
 
 lens = df_test.groupby("trajectory_id").size()
 short = lens < WINDOW
 print("frac of trajectories:", short.mean())
 print("frac of positions:   ", lens[short].sum() / lens.sum())
 
-INFER_BATCH = WINDOW   # how many "ending-at-t" windows to forward in one pass
+INFER_BATCH = 32   # how many "ending-at-t" windows to forward in one pass
 
 def predict_and_score_testernal(model):
-    """Run ONLINE (causal) per-message prediction on the pre-normalized 2025
-    frame, then score using the `report` column.
-
-    For each message at time t, the model sees x_{t-W+1} ... x_t and we take
-    only the prediction at the last position. Equivalent to what the
-    production online-inference script does — every message gets exactly ONE
-    prediction, using only past info.
-
-    Metric definitions (unchanged):
-      - recall:        correctly predicted fishing among report == "fishing"
-      - acc_conf:      correctly predicted non-fishing among report == "conf_no_fishing"
-      - precision:     report == "fishing" hits among ALL rows with pred_fishing == 1
-                       (rows whose report is anything else — including unknowns —
-                        count as false positives in the denominator)
-      - f1:            harmonic mean of precision and recall above
-    """
-    df = df_test.copy()
+    df = df_test
+    df.drop(
+        columns=["p_fishing", "pred_fishing"],
+        errors="ignore",
+        inplace=True,
+    )
     df["p_fishing"] = np.nan
 
     model.eval()
-    with torch.no_grad():
+    with torch.inference_mode():
         for traj_id, traj in df.groupby("trajectory_id", sort=False):
             idx = traj.index.to_numpy()
             X_all = traj[FEATURES].to_numpy(dtype=np.float32)
@@ -406,19 +412,27 @@ def predict_and_score_testernal(model):
         labels=[0, 1],
     )
 
-    # True positives (TP) of labeled
-    pred_pos_df = df[df["pred_fishing"] == 1]
-    tp = int((pred_pos_df["report"] == "fishing").sum())
+    pred_pos = df["pred_fishing"] == 1
+    pred_neg = ~pred_pos
 
-    # False positives (FP) of labeled
-    fp = int((pred_pos_df["report"] == "conf_no_fishing").sum())
+    is_fishing = df["report"] == "fishing"
+    is_no_fishing = df["report"] == "conf_no_fishing"
+    is_unknown = df["report"] == "unknown"
 
-    # True negatives (TN) of labeled
-    pred_neg_df = df[df["pred_fishing"] == 0]
-    tn = int((pred_neg_df["report"] == "conf_no_fishing").sum())
+    tp = int((pred_pos & is_fishing).sum())
+    fp = int((pred_pos & is_no_fishing).sum())
+    tn = int((pred_neg & is_no_fishing).sum())
+    fn = int((pred_neg & is_fishing).sum())
 
-    # False negatives (FN) of labeled
-    fn = int((pred_neg_df["report"] == "fishing").sum())
+    n_pred_fish = int(pred_pos.sum())
+    n_pred_no_fish = int(pred_neg.sum())
+
+    n_reported_fish = int(is_fishing.sum())
+    n_reported_conf_no_fish = int(is_no_fishing.sum())
+
+    n_unknown = int(is_unknown.sum())
+    n_pred_fish_of_unknown = int((pred_pos & is_unknown).sum())
+    n_pred_no_fish_of_unknown = int((pred_neg & is_unknown).sum())
 
     # Precision of confirmed.
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
@@ -434,21 +448,6 @@ def predict_and_score_testernal(model):
 
     # F1 Score
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-
-    # Number of predictions for each class
-    n_pred_fish = int((df["pred_fishing"] == 1).sum())
-    n_pred_no_fish = int((df["pred_fishing"] == 0).sum())
-
-    # Number of reports for each class
-    n_reported_fish = int((df["report"] == "fishing").sum())
-    n_reported_conf_no_fish = int((df["report"] == "conf_no_fishing").sum())
-
-    # Number of unknowns
-    unknown_df = df[df["report"] == "unknown"]
-    n_unknown = int(len(unknown_df))
-
-    n_pred_fish_of_unknown = int((unknown_df["pred_fishing"] == 1).sum())
-    n_pred_no_fish_of_unknown = int((unknown_df["pred_fishing"] == 0).sum())
 
     del df
     gc.collect()
@@ -548,6 +547,9 @@ for seed in SEEDS:
     # Reload best checkpoint for evaluation
     model.load_state_dict(torch.load(model_name, map_location=device))
     
+    optimizer.zero_grad(set_to_none=True)
+    gc.collect()
+    torch.cuda.empty_cache()
     
     # testernal 2025_1_3 test — the metric that matters
     test = predict_and_score_testernal(model)
@@ -583,7 +585,6 @@ print("\n========== SUMMARY ==========")
 print(df_res.to_string(index=False))
 
 metric_cols = [
-    "int_loss", "int_f1", "int_precision", "int_recall", "int_accuracy",
     "test_loss", "test_f1", "test_precision", "test_recall", "test_specificity", "test_accuracy",
 ]
 summary = df_res[metric_cols].agg(["mean", "std"]).T

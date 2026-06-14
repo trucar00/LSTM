@@ -294,16 +294,31 @@ test_mmsi_list = list(test_mmsi)
 
 print(f"Preparing test set: {VAL_TEST_FILES}")
 
+TEST_COLUMNS = list(dict.fromkeys([
+    "mmsi",
+    "trajectory_id",
+    "date_time_utc",
+    "y_train",
+    "sample_weight",
+    "report",
+    *BASE_FEATURES,
+]))
+
 dfs = []
+
 for f in VAL_TEST_FILES:
     df_part = pd.read_parquet(
         f,
         engine="pyarrow",
-        filters=[("mmsi", "in", test_mmsi_list)]
+        columns=TEST_COLUMNS,
+        filters=[("mmsi", "in", test_mmsi_list)],
     )
     dfs.append(df_part)
 
-df_test = pd.concat(dfs, ignore_index=True)
+df_test = pd.concat(dfs, ignore_index=True, copy=False)
+
+del dfs, df_part
+gc.collect()
 
 # Load the test set for finding the loss
 
@@ -326,124 +341,120 @@ print("frac of positions:   ", lens[short].sum() / lens.sum())
 
 
 def predict_and_score_external(model):
-    df = df_test.copy()
-    df["pred_sum"]   = 0.0
-    df["pred_count"] = 0.0
+    df = df_test
+    pred_sum = np.zeros(len(df), dtype=np.float32)
+    pred_count = np.zeros(len(df), dtype=np.uint16)
 
     model.eval()
-    with torch.no_grad():
-        for traj_id, traj in df.groupby("trajectory_id", sort=False):
+    with torch.inference_mode():
+        for _, traj in df.groupby("trajectory_id", sort=False):
             idx = traj.index.to_numpy()
-            X_all = traj[FEATURES].to_numpy(dtype=np.float32)
+            X_all = traj[FEATURES].to_numpy(dtype=np.float32, copy=False)
             n_traj = len(traj)
+
             if n_traj < 8:
                 continue
-            starts = list(range(0, max(1, n_traj - WINDOW + 1), STRIDE))
+
+            starts = list(range(
+                0,
+                max(1, n_traj - WINDOW + 1),
+                STRIDE,
+            ))
+
             final_start = max(0, n_traj - WINDOW)
             if starts[-1] != final_start:
-                starts.append(final_start)  # ensure end of trajectory is covered
+                starts.append(final_start)
+
             for start in starts:
-                end = start + WINDOW
-                x = X_all[start:end]          # length L, leave it short
+                x = X_all[start:start + WINDOW]
                 L = len(x)
-                x_tensor = torch.from_numpy(x[None, :, :]).to(device)
-                logits = model(x_tensor)
-                probs = torch.sigmoid(logits).cpu().numpy()[0]
-                valid_idx   = idx[start:start + L]
-                valid_probs = probs[:L]
-                df.loc[valid_idx, "pred_sum"]   += valid_probs
-                df.loc[valid_idx, "pred_count"] += 1
 
-    # Rows we never predicted on (e.g. trajectories with < 8 points) get NaN here,
-    # which becomes pred_fishing = 0. That's fine for the report-based scoring
-    # below since those rows just look like "not predicted as fishing".
-    df["p_fishing"]    = df["pred_sum"] / df["pred_count"]
+                x_tensor = torch.from_numpy(
+                    np.ascontiguousarray(x[None, :, :])
+                ).to(device, non_blocking=True)
 
-    df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
+                probs = torch.sigmoid(model(x_tensor))
+                probs = probs.squeeze(0).cpu().numpy()
 
-    eval_mask = (
-            (df["sample_weight"] == 1)
-            & df["p_fishing"].notna()
-        )
-    
+                valid_idx = idx[start:start + L]
 
-    y_true = df.loc[eval_mask, "y_train"].to_numpy(dtype=int)
-    y_prob = df.loc[eval_mask, "p_fishing"].to_numpy()
+                pred_sum[valid_idx] += probs[:L]
+                pred_count[valid_idx] += 1
 
-    test_logloss = log_loss(
-        y_true,
-        y_prob,
-        labels=[0, 1],
+    p_fishing = np.full(len(df), np.nan, dtype=np.float32)
+    predicted = pred_count > 0
+    p_fishing[predicted] = (
+        pred_sum[predicted] / pred_count[predicted]
     )
 
-    # True positives (TP) of labeled
-    pred_pos_df = df[df["pred_fishing"] == 1]
-    tp = int((pred_pos_df["report"] == "fishing").sum())
+    pred_fishing = np.zeros(len(df), dtype=np.uint8)
+    pred_fishing[predicted] = p_fishing[predicted] > 0.5
 
-    # False positives (FP) of labeled
-    fp = int((pred_pos_df["report"] == "conf_no_fishing").sum())
+    sample_weight = df["sample_weight"].to_numpy(copy=False)
+    y_train = df["y_train"].to_numpy(copy=False)
+    report = df["report"].to_numpy(copy=False)
 
-    # True negatives (TN) of labeled
-    pred_neg_df = df[df["pred_fishing"] == 0]
-    tn = int((pred_neg_df["report"] == "conf_no_fishing").sum())
+    eval_mask = (sample_weight == 1) & predicted
 
-    # False negatives (FN) of labeled
-    fn = int((pred_neg_df["report"] == "fishing").sum())
+    y_true = y_train[eval_mask].astype(np.uint8, copy=False)
+    y_prob = p_fishing[eval_mask]
 
-    # Precision of confirmed.
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    test_logloss = log_loss(y_true, y_prob, labels=[0, 1])
 
-    # Accuracy of confirmed.
-    accuracy = (tp + tn) / (tp + tn + fp +fn) if (tp + tn + fp +fn) > 0 else 0.0
+    pred_pos = pred_fishing == 1
+    pred_neg = ~pred_pos
 
-    # Recall (sensitvity)
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    fishing = report == "fishing"
+    no_fishing = report == "conf_no_fishing"
+    unknown = report == "unknown"
 
-    # Specificity, true negative rate, on confirmed non-fishing rows
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    tp = int(np.sum(pred_pos & fishing))
+    fp = int(np.sum(pred_pos & no_fishing))
+    tn = int(np.sum(pred_neg & no_fishing))
+    fn = int(np.sum(pred_neg & fishing))
 
-    # F1 Score
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    specificity = tn / (tn + fp) if tn + fp else 0.0
+    accuracy = (
+        (tp + tn) / (tp + tn + fp + fn)
+        if tp + tn + fp + fn
+        else 0.0
+    )
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall
+        else 0.0
+    )
 
-    # Number of predictions for each class
-    n_pred_fish = int((df["pred_fishing"] == 1).sum())
-    n_pred_no_fish = int((df["pred_fishing"] == 0).sum())
-
-    # Number of reports for each class
-    n_reported_fish = int((df["report"] == "fishing").sum())
-    n_reported_conf_no_fish = int((df["report"] == "conf_no_fishing").sum())
-
-    # Number of unknowns
-    unknown_df = df[df["report"] == "unknown"]
-    n_unknown = int(len(unknown_df))
-
-    n_pred_fish_of_unknown = int((unknown_df["pred_fishing"] == 1).sum())
-    n_pred_no_fish_of_unknown = int((unknown_df["pred_fishing"] == 0).sum())
-
-    del df
-    gc.collect()
-
-
-    return {
-        "test_tp":                  tp,
-        "test_fp":                  fp,
-        "test_tn":                  tn,
-        "test_fn":                  fn,
-        "test_accuracy":            accuracy,
-        "test_recall":              recall,
-        "test_specificity":         specificity,
-        "test_precision":           precision,           
-        "test_f1":                  f1,
-        "test_loss":                test_logloss,
-        "test_n_pred_fish":         n_pred_fish,
-        "test_n_pred_no_fish":      n_pred_no_fish,
-        "test_n_reported_fish":     n_reported_fish,
-        "test_n_reported_no_fish":  n_reported_conf_no_fish,
-        "test_n_unknowns":          n_unknown,
-        "test_n_pred_fish_of_unknown": n_pred_fish_of_unknown,
-        "test_n_pred_no_fish_of_unknown": n_pred_no_fish_of_unknown
+    result = {
+        "test_tp": tp,
+        "test_fp": fp,
+        "test_tn": tn,
+        "test_fn": fn,
+        "test_accuracy": accuracy,
+        "test_recall": recall,
+        "test_specificity": specificity,
+        "test_precision": precision,
+        "test_f1": f1,
+        "test_loss": test_logloss,
+        "test_n_pred_fish": int(pred_pos.sum()),
+        "test_n_pred_no_fish": int(pred_neg.sum()),
+        "test_n_reported_fish": int(fishing.sum()),
+        "test_n_reported_no_fish": int(no_fishing.sum()),
+        "test_n_unknowns": int(unknown.sum()),
+        "test_n_pred_fish_of_unknown": int(
+            np.sum(pred_pos & unknown)
+        ),
+        "test_n_pred_no_fish_of_unknown": int(
+            np.sum(pred_neg & unknown)
+        ),
     }
 
+    del pred_sum, pred_count, p_fishing, pred_fishing
+    gc.collect()
+
+    return result
 
 # ============================================================
 # Multi-seed loop
