@@ -38,21 +38,25 @@ def all_mmsis_in(files):
 
 def get_val_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
-    val_mmsi = set(
+    val_mmsis = set(
         split_df.loc[
             split_df["split"] == which,
             "mmsi"
         ]
     )
-    return val_mmsi
+    return val_mmsis
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
-train_mmsi = all_mmsis_in(TRAIN_FILES)
-#val_mmsi   = all_mmsis_in(VAL_FILES)
-val_mmsi = get_val_mmsis()
-print(f"Train (Q1 2023) all vessels: {len(train_mmsi)} | Val (Q1 2024) only validation vessels: {len(val_mmsi)}")
+val_mmsis = get_val_mmsis(which="validation")
+test_mmsis = get_val_mmsis(which="test")
+all_mmsis_in_train = all_mmsis_in(TRAIN_FILES)
+train_mmsis = all_mmsis_in_train - val_mmsis - test_mmsis
+assert train_mmsis.isdisjoint(val_mmsis), "Train/val MMSIs overlap!"
+assert train_mmsis.isdisjoint(test_mmsis), "Train/test MMSIs overlap!"
+
+print(f"Train (Q1 2023) all vessels: {len(train_mmsis)} | Val (Q1 2024) only validation vessels: {len(val_mmsis)}")
 print(f"Vessels present in both quarters (expected, fine): "
-      f"{len(train_mmsi & val_mmsi)}")
+      f"{len(train_mmsis & val_mmsis)}")
 
 # ------------------------------------------------------------------
 # Normalization stats -- fit on TRAIN (Q1) only
@@ -227,8 +231,8 @@ print("Building caches...")
 # Only the (window, stride) combos the search can actually use
 # (stride > window // 2 is pruned in the objective).
 for w, s in [(128, 64), (128, 128), (256, 128), (256, 256)]:
-    cache_windows(TRAIN_FILES, train_mmsi, "train", w, s)
-    cache_windows(VAL_FILES,   val_mmsi,   "val",   w, s)
+    cache_windows(TRAIN_FILES, train_mmsis, "train", w, s)
+    cache_windows(VAL_FILES,   val_mmsis,   "val",   w, s)
 print("Caches ready.\n")
 
 def run_epoch(model, loader, optimizer, device, train: bool):

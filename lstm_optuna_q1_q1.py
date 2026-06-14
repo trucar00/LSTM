@@ -31,6 +31,8 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
+needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
+
 def all_mmsis_in(files):
     s = set()
     for f in files:
@@ -75,7 +77,6 @@ else:
     sum_x  = pd.Series(0.0, index=FEATURES)
     sum_x2 = pd.Series(0.0, index=FEATURES)
     count = 0
-    needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
         df = df[df["mmsi"].isin(train_mmsis)]
@@ -199,7 +200,7 @@ print("Using device:", device)
  
 neg, pos = 0, 0
 for f in TRAIN_FILES:
-    df_tmp = pd.read_parquet(f, columns=["sample_weight", "y_train"])
+    df_tmp = pd.read_parquet(f, columns=["mmsi", "sample_weight", "y_train"])
     df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsis)]
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
     neg += (df_tmp["y_train"] == 0).sum()
