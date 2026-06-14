@@ -19,10 +19,10 @@ FOLDER = "tuning_temporal"
 print("--------", TAG, "----------")
 
 # ------------------------------------------------------------------
-# Temporal split: Q1 -> train, Q3 -> val
+# Temporal split: Q1 2023 -> train, Q1 2024 val only mmsis -> val
 # ------------------------------------------------------------------
-TRAIN_FILES = ["three_months/feats_new_rule_bilstm/2023_1_3_feats.parquet"]  # Q2 2023
-VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet"]  # Q2 2024
+TRAIN_FILES = ["three_months/feats_new_rule_bilstm/2023_1_3_feats.parquet"]  # Q1 2023
+VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet"]  # Q1 2024
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
@@ -35,11 +35,22 @@ def all_mmsis_in(files):
     for f in files:
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
+
+def get_val_mmsis(path="../split_mmsis_val_test.csv"):
+    split_df = pd.read_csv(path)
+    val_mmsi = set(
+        split_df.loc[
+            split_df["split"] == "validation",
+            "mmsi"
+        ]
+    )
+    return val_mmsi
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
 train_mmsi = all_mmsis_in(TRAIN_FILES)
-val_mmsi   = all_mmsis_in(VAL_FILES)
-print(f"Train (Q1) vessels: {len(train_mmsi)} | Val (Q3) vessels: {len(val_mmsi)}")
+#val_mmsi   = all_mmsis_in(VAL_FILES)
+val_mmsi = get_val_mmsis()
+print(f"Train (Q1 2023) all vessels: {len(train_mmsi)} | Val (Q1 2024) only validation vessels: {len(val_mmsi)}")
 print(f"Vessels present in both quarters (expected, fine): "
       f"{len(train_mmsi & val_mmsi)}")
 

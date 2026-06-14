@@ -19,10 +19,10 @@ FOLDER = "tuning_temporal"
 print("--------", TAG, "----------")
 
 # ------------------------------------------------------------------
-# Temporal split: Q1 -> train, Q3 -> val
+# Temporal split: Q1 2023 -> train, Q1 2024 val mmsis-> val
 # ------------------------------------------------------------------
 TRAIN_FILES = ["three_months/feats_new_rule_online/2023_1_3_feats.parquet"]  # Q1 2024
-VAL_FILES   = ["three_months/feats_new_rule_online/2023_1_3_feats.parquet"]  # Q3 2024
+VAL_FILES   = ["three_months/feats_new_rule_online/2024_1_3_feats.parquet"]  # Q3 2024
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
@@ -50,7 +50,7 @@ def get_val_mmsis(path="../split_mmsis_val_test.csv"):
 # validation mmsis from the whole of 2024 so we dont validate on the mmsis saved for testing only
 train_mmsi = all_mmsis_in(TRAIN_FILES)
 val_mmsi   = get_val_mmsis()
-print(f"Train (Q1 2023) vessels: {len(train_mmsi)} | Val (Q1 2024) vessels: {len(val_mmsi)}")
+print(f"Train (Q1 2023) vessels: {len(train_mmsi)} | Val (Q1 2024 val only mmsis) vessels: {len(val_mmsi)}")
 print(f"Vessels present in both quarters (expected, fine): "
       f"{len(train_mmsi & val_mmsi)}")
 
