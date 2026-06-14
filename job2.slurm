@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=CPUQ
-##SBATCH --gres=gpu:1
-#SBATCH --time=6:00:00
+#SBATCH --partition=GPUQ
+#SBATCH --gres=gpu:1
+#SBATCH --time=4:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=three_months/output_concat_feats_2023_new_rules_%j.txt    # Log file
-#SBATCH --job-name=concat_feats_2023
+#SBATCH --output=training_temporal/output_BILSTM_%j.txt    # Log file
+#SBATCH --job-name=BILSTM_train_temporal_split
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -37,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u features_2_conf_big.py
+python -u bilstm_train_test_5runs.py
