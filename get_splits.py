@@ -12,19 +12,42 @@ files = [
 # MMSI split — fixed across seeds so train/val/test are identical
 # ============================================================
 
-all_mmsis = set()
-for f in files:
-    print("reading", f)
-    m = pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique()
-    all_mmsis.update(m)
+# Read MMSI + gear_report first
+split_df = pd.concat(
+    [
+        pd.read_parquet(f, columns=["mmsi", "gear_report"])
+        for f in files
+    ],
+    ignore_index=True,
+)
 
-mmsis = np.array(list(all_mmsis))
+# One row per MMSI.
+# If an MMSI has multiple gear_report values, use the most frequent one.
+mmsi_gear = (
+    split_df
+    .groupby("mmsi")["gear_report"]
+    .agg(lambda x: x.value_counts().idxmax())
+    .reset_index()
+)
+
 split_rng = np.random.default_rng(5)
-split_rng.shuffle(mmsis)
 
-n = len(mmsis)
-val_mmsi = set(mmsis[: n // 2])
-test_mmsi = set(mmsis[n // 2 :])
+val_mmsi = set()
+test_mmsi = set()
+
+for gear, group in mmsi_gear.groupby("gear_report"):
+    gear_mmsis = group["mmsi"].to_numpy()
+    split_rng.shuffle(gear_mmsis)
+
+    n = len(gear_mmsis)
+    n_val = n // 2
+
+    val_mmsi.update(gear_mmsis[:n_val])
+    test_mmsi.update(gear_mmsis[n_val:])
+
+print("Validation MMSIs:", len(val_mmsi))
+print("Test MMSIs:", len(test_mmsi))
+print("Overlap:", len(val_mmsi & test_mmsi))
 
 split_path = "../split_mmsis_val_test.csv"
 
