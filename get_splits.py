@@ -36,7 +36,7 @@ val_mmsi = set()
 test_mmsi = set()
 
 for gear, group in mmsi_gear.groupby("gear_report"):
-    gear_mmsis = group["mmsi"].to_numpy()
+    gear_mmsis = group["mmsi"].values.copy()
     split_rng.shuffle(gear_mmsis)
 
     n = len(gear_mmsis)
@@ -108,3 +108,19 @@ mmsis_per_gear["Total"] = mmsis_per_gear[
 ].sum(axis=1)
 
 print(mmsis_per_gear)
+
+check = (
+    mmsi_gear.assign(
+        split=np.where(
+            mmsi_gear["mmsi"].isin(val_mmsi),
+            "Validation",
+            "Test"
+        )
+    )
+    .groupby(["gear_report", "split"])
+    .size()
+    .unstack(fill_value=0)
+)
+
+check["Total"] = check.sum(axis=1)
+print(check)

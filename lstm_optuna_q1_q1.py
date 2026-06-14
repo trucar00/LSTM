@@ -37,6 +37,7 @@ def all_mmsis_in(files):
     return s
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
+# validation mmsis from the whole of 2024, find those who are in val_files
 train_mmsi = all_mmsis_in(TRAIN_FILES)
 val_mmsi   = all_mmsis_in(VAL_FILES)
 print(f"Train (Q1 2023) vessels: {len(train_mmsi)} | Val (Q1 2024) vessels: {len(val_mmsi)}")
