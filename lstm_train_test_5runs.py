@@ -323,6 +323,10 @@ df_test["ra_jerk"]  = df_test["ra_jerk"].clip(-5, 5)
 df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
 df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
 
+lens = df_test.groupby("trajectory_id").size()
+short = lens < WINDOW
+print("frac of trajectories:", short.mean())
+print("frac of positions:   ", lens[short].sum() / lens.sum())
 
 INFER_BATCH = WINDOW   # how many "ending-at-t" windows to forward in one pass
 

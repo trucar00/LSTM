@@ -320,7 +320,9 @@ df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
 df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
 
 lens = df_test.groupby("trajectory_id").size()
-print((lens < WINDOW).mean(), "of trajectories shorter than WINDOW")
+short = lens < WINDOW
+print("frac of trajectories:", short.mean())
+print("frac of positions:   ", lens[short].sum() / lens.sum())
 
 
 def predict_and_score_external(model):

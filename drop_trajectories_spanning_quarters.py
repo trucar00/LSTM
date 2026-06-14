@@ -32,7 +32,7 @@ def drop_trajectories_spanning_quarters(df, last_day):
 def main(version):
       
     for year in range(2023, 2023+1):
-            for i in range(1, 12+1, 3):
+            for i in range(10, 12+1, 3):
                 print(f"{year} -- quarter: {i}-{i+2}")
                 df = pd.read_parquet(f"three_months/feats_new_rule_{version}/{year}_{i}_{i+2}_feats.parquet", engine="pyarrow")
                 print("Dropping trajectories that have messages 1 hour before next quarter")
@@ -41,7 +41,7 @@ def main(version):
                 df = drop_trajectories_spanning_quarters(df, last_day=last_day)
                 traj_aft = df["trajectory_id"].nunique()
                 print("Dropped ", traj_bef-traj_aft, " trajectories of ", traj_bef, " traj before.")
-                df.to_parquet(f"three_months/feats_new_rule_{version}/{year}_{i}_{i+2}_feats.parquet", index=False)
+                df.to_parquet(f"three_months/feats_new_rule_{version}/{year}_{i}_{i+2}_feats2.parquet", index=False)
 
     return
 
