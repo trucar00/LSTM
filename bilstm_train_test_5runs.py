@@ -77,9 +77,9 @@ def all_mmsis_in(files):
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
 
-def get_val_test_mmsis(test_or_val, path="../train_val_test_mmsis.csv"):
+def get_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
-    return set(split_df.loc[split_df["split"] == test_or_val, "mmsi"])
+    return set(split_df.loc[split_df["split"] == which, "mmsi"])
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
 val_mmsis = get_val_test_mmsis(which="validation")
