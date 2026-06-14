@@ -13,6 +13,7 @@ def drop_trajectories_spanning_quarters(df, last_day):
     print("first date next quarter: ", first_date_next_quarter)
 
     df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
+    print(df["date_time_utc"].max())
 
     # Find trajectories with points in the final hour
     late_traj_ids = df.loc[

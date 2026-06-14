@@ -13,7 +13,7 @@ from sklearn.metrics import log_loss
 import gc
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_temporal/best_params_LSTM_2023_train_2024_val.json")
+tuned_params_path = Path("tuning_temporal/best_params_LSTM_Q1-23_train_Q1-24_val.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
