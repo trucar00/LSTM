@@ -13,8 +13,8 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "BILSTM_Q1-23_train_Q1-24_val"
-FOLDER = "tuning_temporal"
+TAG = "BILSTM_Q1-23_train_Q1-24_val_unseen"
+FOLDER = "tuning_DONE"
 
 print("--------", TAG, "----------")
 
@@ -36,11 +36,11 @@ def all_mmsis_in(files):
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
 
-def get_val_mmsis(path="../split_mmsis_val_test.csv"):
+def get_val_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
     val_mmsi = set(
         split_df.loc[
-            split_df["split"] == "validation",
+            split_df["split"] == which,
             "mmsi"
         ]
     )

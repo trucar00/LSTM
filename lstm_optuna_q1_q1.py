@@ -8,6 +8,7 @@ import os
 import pickle
 import optuna
 from pathlib import Path
+import gc
 
 WINDOW = 256
 STRIDE = 128
@@ -74,7 +75,7 @@ else:
     sum_x  = pd.Series(0.0, index=FEATURES)
     sum_x2 = pd.Series(0.0, index=FEATURES)
     count = 0
-    needed_cols = ["date_time_utc"] + BASE_FEATURES
+    needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
         df = df[df["mmsi"].isin(train_mmsis)]
@@ -86,6 +87,8 @@ else:
         sum_x  += x.sum()
         sum_x2 += (x ** 2).sum()
         count  += len(x)
+    del df
+    gc.collect()
     mu = sum_x / count
     sigma = np.sqrt((sum_x2 / count) - mu ** 2).replace(0, 1)
     with open(mu_sigma_path, "wb") as f:
