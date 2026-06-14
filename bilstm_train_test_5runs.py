@@ -308,6 +308,7 @@ TEST_COLUMNS = list(dict.fromkeys([
     *BASE_FEATURES,
 ]))
 
+# TEST ON FUTURE UNSEEN VESSELS
 dfs = []
 
 for f in VAL_TEST_FILES:
@@ -324,23 +325,50 @@ df_test = pd.concat(dfs, ignore_index=True, copy=False)
 del dfs, df_part
 gc.collect()
 
+# TEST ON FUTURE BUT SEEN VESSELS
+train_mmsi_list = list(train_mmsis)
+dfs = []
+
+for f in VAL_TEST_FILES:
+    df_part = pd.read_parquet(
+        f,
+        engine="pyarrow",
+        columns=TEST_COLUMNS,
+        filters=[("mmsi", "in", train_mmsi_list)],
+    )
+    dfs.append(df_part)
+
+df_test_seen = pd.concat(dfs, ignore_index=True, copy=False)
+
+del dfs, df_part
+gc.collect()
+
+def prepare_test_df(df):
+    df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
+    _month = df["date_time_utc"].dt.month
+    df["month_sin"] = np.sin(2 * np.pi * _month / 12)
+    df["month_cos"] = np.cos(2 * np.pi * _month / 12)
+    for col in FEATURES:
+        df[col] = (df[col] - mu[col]) / sigma[col]
+    df["ra_accel"] = df["ra_accel"].clip(-5, 5)
+    df["ra_jerk"]  = df["ra_jerk"].clip(-5, 5)
+    df["ra_dcog"]  = df["ra_dcog"].clip(-5, 5)
+    return df.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
+
+df_test      = prepare_test_df(df_test)
+df_test_seen = prepare_test_df(df_test_seen)
 # Load the test set for finding the loss
 
 
-df_test["date_time_utc"] = pd.to_datetime(df_test["date_time_utc"])
-_month = df_test["date_time_utc"].dt.month
-df_test["month_sin"] = np.sin(2 * np.pi * _month / 12)
-df_test["month_cos"] = np.cos(2 * np.pi * _month / 12)
-for col in FEATURES:
-    df_test[col] = (df_test[col] - mu[col]) / sigma[col]
-df_test["ra_accel"] = df_test["ra_accel"].clip(-5, 5)
-df_test["ra_jerk"]  = df_test["ra_jerk"].clip(-5, 5)
-df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
-df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
 
+def predict_and_score_external(model, seen):
+    if seen:
+        prefix = "seen"
+        df = df_test_seen
+    else:
+        prefix = "unseen"
+        df = df_test
 
-def predict_and_score_external(model):
-    df = df_test
     pred_sum = np.zeros(len(df), dtype=np.float32)
     pred_count = np.zeros(len(df), dtype=np.uint16)
 
@@ -426,26 +454,27 @@ def predict_and_score_external(model):
         else 0.0
     )
 
+
     result = {
-        "test_tp": tp,
-        "test_fp": fp,
-        "test_tn": tn,
-        "test_fn": fn,
-        "test_accuracy": accuracy,
-        "test_recall": recall,
-        "test_specificity": specificity,
-        "test_precision": precision,
-        "test_f1": f1,
-        "test_loss": test_logloss,
-        "test_n_pred_fish": int(pred_pos.sum()),
-        "test_n_pred_no_fish": int(pred_neg.sum()),
-        "test_n_reported_fish": int(fishing.sum()),
-        "test_n_reported_no_fish": int(no_fishing.sum()),
-        "test_n_unknowns": int(unknown.sum()),
-        "test_n_pred_fish_of_unknown": int(
+        f"{prefix}_tp": tp,
+        f"{prefix}_fp": fp,
+        f"{prefix}_tn": tn,
+        f"{prefix}_fn": fn,
+        f"{prefix}_accuracy": accuracy,
+        f"{prefix}_recall": recall,
+        f"{prefix}_specificity": specificity,
+        f"{prefix}_precision": precision,
+        f"{prefix}_f1": f1,
+        f"{prefix}_loss": test_logloss,
+        f"{prefix}_n_pred_fish": int(pred_pos.sum()),
+        f"{prefix}_n_pred_no_fish": int(pred_neg.sum()),
+        f"{prefix}_n_reported_fish": int(fishing.sum()),
+        f"{prefix}_n_reported_no_fish": int(no_fishing.sum()),
+        f"{prefix}_n_unknowns": int(unknown.sum()),
+        f"{prefix}_n_pred_fish_of_unknown": int(
             np.sum(pred_pos & unknown)
         ),
-        "test_n_pred_no_fish_of_unknown": int(
+        f"{prefix}_n_pred_no_fish_of_unknown": int(
             np.sum(pred_neg & unknown)
         ),
     }
@@ -529,19 +558,30 @@ for seed in SEEDS:
     model.load_state_dict(torch.load(model_name, map_location=device))
     
     # testernal 2025_1_3 test — the metric that matters
-    test = predict_and_score_external(model)
-    print(f"[seed {seed}] TEST on test vessels from 2024 | "
-          f"precision {test['test_precision']:.3f} "
-          f"recall {test['test_recall']:.3f} "
-          f"specificity {test['test_specificity']:.3f} "
-          f"f1 {test['test_f1']:.3f} "
-          f"accuracy {test['test_accuracy']:.3f} ")
+    test_unseen = predict_and_score_external(model, seen=False)
+
+    print(f"[seed {seed}] TEST on unseen test vessels from 2024 | "
+          f"precision {test_unseen['test_precision']:.3f} "
+          f"recall {test_unseen['test_recall']:.3f} "
+          f"specificity {test_unseen['test_specificity']:.3f} "
+          f"f1 {test_unseen['test_f1']:.3f} "
+          f"accuracy {test_unseen['test_accuracy']:.3f} ")
+    
+    test_seen = predict_and_score_external(model, seen=True)
+
+    print(f"[seed {seed}] TEST on unseen test vessels from 2024 | "
+          f"precision {test_seen['test_precision']:.3f} "
+          f"recall {test_seen['test_recall']:.3f} "
+          f"specificity {test_seen['test_specificity']:.3f} "
+          f"f1 {test_seen['test_f1']:.3f} "
+          f"accuracy {test_seen['test_accuracy']:.3f} ")
 
     row = {
         "seed": seed,
         "best_val_loss": best_val,
         "epochs_trained": len(history),
-        **test,
+        **test_unseen,
+        **test_seen,
     }
     all_results.append(row)
 
@@ -562,8 +602,10 @@ print("\n========== SUMMARY ==========")
 print(df_res.to_string(index=False))
 
 metric_cols = [
-    "test_loss", "test_f1", "test_precision", "test_recall", "test_specificity", "test_accuracy",
+    "seen_loss", "seen_f1", "seen_precision", "seen_recall", "seen_specificity", "seen_accuracy",
+    "unseen_loss", "unseen_f1", "unseen_precision", "unseen_recall", "unseen_specificity", "unseen_accuracy",
 ]
+
 summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
