@@ -13,16 +13,16 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "LSTM_Q1-23_train_Q1-24_val"
-FOLDER = "tuning_temporal"
+TAG = "LSTM_Q1-23_train_Q1-24_val_unseen"
+FOLDER = "tuning_DONE"
 
 print("--------", TAG, "----------")
 
 # ------------------------------------------------------------------
 # Temporal split: Q1 2023 -> train, Q1 2024 val mmsis-> val
 # ------------------------------------------------------------------
-TRAIN_FILES = ["three_months/feats_new_rule_online/2023_1_3_feats.parquet"]  # Q1 2024
-VAL_FILES   = ["three_months/feats_new_rule_online/2024_1_3_feats.parquet"]  # Q3 2024
+TRAIN_FILES = ["three_months/feats_new_rule_online/2023_1_3_feats.parquet"]  # Q1 2023
+VAL_FILES   = ["three_months/feats_new_rule_online/2024_1_3_feats.parquet"]  # Q1 2024
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
@@ -36,23 +36,30 @@ def all_mmsis_in(files):
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
 
-def get_val_mmsis(path="../split_mmsis_val_test.csv"):
+def get_val_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
-    val_mmsi = set(
+    val_mmsis = set(
         split_df.loc[
-            split_df["split"] == "validation",
+            split_df["split"] == which,
             "mmsi"
         ]
     )
-    return val_mmsi
+    return val_mmsis
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
 # validation mmsis from the whole of 2024 so we dont validate on the mmsis saved for testing only
-train_mmsi = all_mmsis_in(TRAIN_FILES)
-val_mmsi   = get_val_mmsis()
-print(f"Train (Q1 2023) vessels: {len(train_mmsi)} | Val (Q1 2024 val only mmsis) vessels: {len(val_mmsi)}")
+val_mmsis = get_val_mmsis(which="validation")
+test_mmsis = get_val_mmsis(which="test")
+all_mmsis_in_train = all_mmsis_in(TRAIN_FILES)
+train_mmsis = all_mmsis_in_train - val_mmsis - test_mmsis
+assert train_mmsis.isdisjoint(val_mmsis), "Train/val MMSIs overlap!"
+assert train_mmsis.isdisjoint(test_mmsis), "Train/test MMSIs overlap!"
+
+print(f"MMSIs in training file: {len(train_mmsis)}")
+
+print(f"Train (Q1 2023) vessels: {len(train_mmsis)} | Val (Q1 2024 val only mmsis) vessels: {len(val_mmsis)}")
 print(f"Vessels present in both quarters (expected, fine): "
-      f"{len(train_mmsi & val_mmsi)}")
+      f"{len(train_mmsis & val_mmsis)}")
 
 # ------------------------------------------------------------------
 # Normalization stats -- fit on TRAIN (Q1) only
@@ -70,6 +77,7 @@ else:
     needed_cols = ["date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
+        df = df[df["mmsi"].isin(train_mmsis)]
         df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
         month = df["date_time_utc"].dt.month
         df["month_sin"] = np.sin(2 * np.pi * month / 12)
@@ -189,6 +197,7 @@ print("Using device:", device)
 neg, pos = 0, 0
 for f in TRAIN_FILES:
     df_tmp = pd.read_parquet(f, columns=["sample_weight", "y_train"])
+    df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsis)]
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
     neg += (df_tmp["y_train"] == 0).sum()
     pos += (df_tmp["y_train"] == 1).sum()
@@ -227,8 +236,8 @@ print("Building caches...")
 # Only the (window, stride) combos the search can actually use
 # (stride > window // 2 is pruned in the objective).
 for w, s in [(128, 64), (128, 128), (256, 128), (256, 256)]:
-    cache_windows(TRAIN_FILES, train_mmsi, "train", w, s)
-    cache_windows(VAL_FILES,   val_mmsi,   "val",   w, s)
+    cache_windows(TRAIN_FILES, train_mmsis, "train", w, s)
+    cache_windows(VAL_FILES,   val_mmsis,   "val",   w, s)
 print("Caches ready.\n")
 
 def run_epoch(model, loader, optimizer, device, train: bool):
