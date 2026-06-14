@@ -13,7 +13,7 @@ from sklearn.metrics import log_loss
 import gc
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_temporal/best_params_BiLSTM_2023_train_2024_val.json")
+tuned_params_path = Path("tuning_DONE/best_params_BILSTM_Q1-23_train_Q1-24_val_unseen.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -64,11 +64,11 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1]
+SEEDS = [0, 1, 2, 3, 4]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_temporal/"
+FOLDER = "training_DONE/"
 TAG = "all_2023_bilstm"
 
 def all_mmsis_in(files):
@@ -77,15 +77,18 @@ def all_mmsis_in(files):
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
 
-def get_val_test_mmsis(test_or_val, path="../split_mmsis_val_test.csv"):
+def get_val_test_mmsis(test_or_val, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
     return set(split_df.loc[split_df["split"] == test_or_val, "mmsi"])
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
-train_mmsi = all_mmsis_in(TRAIN_FILES)
-val_mmsi = get_val_test_mmsis(test_or_val="validation")
-test_mmsi = get_val_test_mmsis(test_or_val="test")
-print(f"Train (all 2023) vessels: {len(train_mmsi)} | Val (2024) vessels: {len(val_mmsi)} | Test (2024) vessels: {len(test_mmsi)}")
+val_mmsis = get_val_test_mmsis(which="validation")
+test_mmsis = get_val_test_mmsis(which="test")
+all_mmsis_in_train = all_mmsis_in(TRAIN_FILES)
+train_mmsis = all_mmsis_in_train - val_mmsis - test_mmsis
+assert train_mmsis.isdisjoint(val_mmsis), "Train/val MMSIs overlap!"
+assert train_mmsis.isdisjoint(test_mmsis), "Train/test MMSIs overlap!"
+print(f"Train (all 2023) vessels: {len(train_mmsis)} | Val (2024) vessels: {len(val_mmsis)} | Test (2024) vessels: {len(test_mmsis)}")
 
 # ------------------------------------------------------------------
 # Normalization stats -- fit on TRAIN (2023) only
@@ -100,9 +103,10 @@ else:
     sum_x  = pd.Series(0.0, index=FEATURES)
     sum_x2 = pd.Series(0.0, index=FEATURES)
     count = 0
-    needed_cols = ["date_time_utc"] + BASE_FEATURES
+    needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
+        df = df[df["mmsi"].isin(train_mmsis)]
         df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
         month = df["date_time_utc"].dt.month
         df["month_sin"] = np.sin(2 * np.pi * month / 12)
@@ -204,9 +208,9 @@ class FishingBiLSTM(nn.Module):
 # Loaders + device + class imbalance (all fixed across seeds)
 # ============================================================
 
-train_ds = AISWindowDataset(TRAIN_FILES, train_mmsi, FEATURES, mu, sigma,
+train_ds = AISWindowDataset(TRAIN_FILES, train_mmsis, FEATURES, mu, sigma,
                             shuffle_files=True, stride=STRIDE, window=WINDOW)
-val_ds   = AISWindowDataset(VAL_TEST_FILES, val_mmsi, FEATURES, mu, sigma,
+val_ds   = AISWindowDataset(VAL_TEST_FILES, val_mmsis, FEATURES, mu, sigma,
                             stride=STRIDE, window=WINDOW)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
@@ -229,7 +233,7 @@ pos = 0
 cols_w = ["mmsi", "sample_weight", "y_train"]
 for f in TRAIN_FILES:
     df_tmp = pd.read_parquet(f, columns=cols_w)
-    #df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsi)].copy()
+    df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsis)]
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
     neg += (df_tmp["y_train"] == 0).sum()
     pos += (df_tmp["y_train"] == 1).sum()
@@ -290,9 +294,9 @@ def run_epoch(model, loader, optimizer=None, train=False):
 # (mu/sigma are seed-independent, so this is safe)
 # ============================================================
 
-test_mmsi_list = list(test_mmsi)
+test_mmsi_list = list(test_mmsis)
 
-print(f"Preparing test set: {VAL_TEST_FILES}")
+print(f"Preparing test set from: {VAL_TEST_FILES}")
 
 TEST_COLUMNS = list(dict.fromkeys([
     "mmsi",
@@ -333,11 +337,6 @@ df_test["ra_accel"] = df_test["ra_accel"].clip(-5, 5)
 df_test["ra_jerk"]  = df_test["ra_jerk"].clip(-5, 5)
 df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
 df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
-
-lens = df_test.groupby("trajectory_id").size()
-short = lens < WINDOW
-print("frac of trajectories:", short.mean())
-print("frac of positions:   ", lens[short].sum() / lens.sum())
 
 
 def predict_and_score_external(model):
@@ -460,7 +459,7 @@ def predict_and_score_external(model):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seeds_results/BiLSTM_temporal_train_2023_val_0.5_2024_test_0.5_2024.csv"
+results_csv_path = f"{FOLDER}/BiLSTM_seeded_results.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -495,7 +494,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/seed/model_bilstm_seed{seed}_temp_split.pt"
+    model_name = f"models/seed/model_bilstm_seed{seed}_temp_unseen_split.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -514,7 +513,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_BiLSTM_seed{seed}_temp_split.csv", index=False
+            f"training_stats/training_history_BiLSTM_seed{seed}_temp_unseen_split.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
@@ -569,6 +568,6 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seeds_results/BiLSTM_seed_results_summary.csv")
+summary.to_csv(f"{FOLDER}/BiLSTM_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seeds_results/BiLSTM_seed_results_summary.csv")
+print(f"Summary:       {FOLDER}/BiLSTM_seed_results_summary.csv")

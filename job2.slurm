@@ -6,8 +6,8 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=training_temporal/output_BILSTM_%j.txt    # Log file
-#SBATCH --job-name=BILSTM_train_temporal_split
+#SBATCH --output=training_DONE/output_BILSTM_%j.txt    # Log file
+#SBATCH --job-name=BILSTM_train_temporal_unseen_split
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
