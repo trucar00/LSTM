@@ -13,7 +13,7 @@ from sklearn.metrics import log_loss
 import gc
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_temporal/best_params_LSTM_2023_train_2024_val.json")
+tuned_params_path = Path("tuning_temporal/best_params_BiLSTM_2023_train_2024_val.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -31,15 +31,15 @@ else:
     print("Tuned parameters not found, using base params ...")
     WINDOW   = 256
     STRIDE   = 128
-    N_LAYERS = 3
-    HIDDEN   = 256
+    N_LAYERS = 2
+    HIDDEN   = 64
     DENSE    = 128
-    DROPOUT  = 0.321
-    BATCH    = 256
-    LR       = 4.56e-4
+    DROPOUT  = 0.326
+    BATCH    = 64
+    LR       = 9.27e-4
     #exit()
 
-BASE = "three_months/feats_new_rule_online"
+BASE = "three_months/feats_new_rule_bilstm"
 
 # TRAIN: all of 2023
 TRAIN_FILES = [
@@ -64,12 +64,12 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4]
+SEEDS = [0, 1]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
 FOLDER = "training_temporal/"
-TAG = "all_2023_online"
+TAG = "all_2023_bilstm"
 
 def all_mmsis_in(files):
     s = set()
@@ -176,7 +176,7 @@ class AISWindowDataset(IterableDataset):
                 yield from self.make_windows(traj)
 
 
-class FishingLSTM(nn.Module):
+class FishingBiLSTM(nn.Module):
     def __init__(self, n_features, hidden=HIDDEN, n_layers=N_LAYERS,
                  dropout=DROPOUT, dense=DENSE):
         super().__init__()
@@ -185,11 +185,11 @@ class FishingLSTM(nn.Module):
             hidden_size=hidden,
             num_layers=n_layers,
             batch_first=True,
-            bidirectional=False,
+            bidirectional=True,
             dropout=dropout if n_layers > 1 else 0.0,
         )
         self.head = nn.Sequential(
-            nn.Linear(hidden, dense),
+            nn.Linear(2 * hidden, dense),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(dense, 1),
@@ -200,7 +200,6 @@ class FishingLSTM(nn.Module):
         logits = self.head(h).squeeze(-1)
         return logits
 
-
 # ============================================================
 # Loaders + device + class imbalance (all fixed across seeds)
 # ============================================================
@@ -209,8 +208,6 @@ train_ds = AISWindowDataset(TRAIN_FILES, train_mmsi, FEATURES, mu, sigma,
                             shuffle_files=True, stride=STRIDE, window=WINDOW)
 val_ds   = AISWindowDataset(VAL_TEST_FILES, val_mmsi, FEATURES, mu, sigma,
                             stride=STRIDE, window=WINDOW)
-test_ds  = AISWindowDataset(VAL_TEST_FILES, test_mmsi, FEATURES, mu, sigma,
-                            stride=STRIDE, window=WINDOW)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
                           num_workers=0,
@@ -218,8 +215,7 @@ train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
                           drop_last=True)
 val_loader  = DataLoader(val_ds,  batch_size=BATCH, shuffle=False,
                          num_workers=0, pin_memory=False)
-test_loader = DataLoader(test_ds, batch_size=BATCH, shuffle=False,
-                         num_workers=0, pin_memory=False)
+
 
 if torch.cuda.is_available():
     print("Cuda available.")
@@ -315,66 +311,39 @@ df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
 df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
 
 
-INFER_BATCH = WINDOW   # how many "ending-at-t" windows to forward in one pass
-
-def predict_and_score_testernal(model):
-    """Run ONLINE (causal) per-message prediction on the pre-normalized 2025
-    frame, then score using the `report` column.
-
-    For each message at time t, the model sees x_{t-W+1} ... x_t and we take
-    only the prediction at the last position. Equivalent to what the
-    production online-inference script does — every message gets exactly ONE
-    prediction, using only past info.
-
-    Metric definitions (unchanged):
-      - recall:        correctly predicted fishing among report == "fishing"
-      - acc_conf:      correctly predicted non-fishing among report == "conf_no_fishing"
-      - precision:     report == "fishing" hits among ALL rows with pred_fishing == 1
-                       (rows whose report is anything else — including unknowns —
-                        count as false positives in the denominator)
-      - f1:            harmonic mean of precision and recall above
-    """
+def predict_and_score_external(model):
     df = df_test.copy()
-    df["p_fishing"] = np.nan
+    df["pred_sum"]   = 0.0
+    df["pred_count"] = 0.0
 
     model.eval()
     with torch.no_grad():
         for traj_id, traj in df.groupby("trajectory_id", sort=False):
             idx = traj.index.to_numpy()
             X_all = traj[FEATURES].to_numpy(dtype=np.float32)
-            n, F = X_all.shape
-            if n < 1:
+            n_traj = len(traj)
+            if n_traj < 8:
                 continue
+            starts = list(range(0, max(1, n_traj - WINDOW + 1), STRIDE))
+            final_start = max(0, n_traj - WINDOW)
+            if starts[-1] != final_start:
+                starts.append(final_start)  # ensure end of trajectory is covered
+            for start in starts:
+                end = start + WINDOW
+                x = X_all[start:end]          # length L, leave it short
+                L = len(x)
+                x_tensor = torch.from_numpy(x[None, :, :]).to(device)
+                logits = model(x_tensor)
+                probs = torch.sigmoid(logits).cpu().numpy()[0]
+                valid_idx   = idx[start:start + L]
+                valid_probs = probs[:L]
+                df.loc[valid_idx, "pred_sum"]   += valid_probs
+                df.loc[valid_idx, "pred_count"] += 1
 
-            # --- Cold-start phase: positions t = 0 .. min(WINDOW, n) - 1 ---
-            # One forward pass on X_all[:WINDOW] gives causal predictions at
-            # every one of those positions because the LSTM is unidirectional.
-            head_len = min(WINDOW, n)
-            x_head = torch.from_numpy(X_all[:head_len][None, :, :]).to(device)
-            probs_head = torch.sigmoid(model(x_head))[0].cpu().numpy()  # (head_len,)
-
-            traj_probs = np.empty(n, dtype=np.float32)
-            traj_probs[:head_len] = probs_head
-
-            # --- Steady-state phase: positions t = WINDOW .. n-1 ---
-            # For each such t, window is X_all[t-WINDOW+1 : t+1]; keep last pred.
-            if n > WINDOW:
-                sw = np.lib.stride_tricks.sliding_window_view(
-                    X_all, window_shape=WINDOW, axis=0
-                )                                  # (n - WINDOW + 1, F, WINDOW)
-                sw = sw.transpose(0, 2, 1)         # -> (n - WINDOW + 1, WINDOW, F)
-                sw = sw[1:]                        # drop window ending at WINDOW-1
-                                                   # (already covered by head)
-
-                for i in range(0, len(sw), INFER_BATCH):
-                    batch_np = np.ascontiguousarray(sw[i:i + INFER_BATCH])
-                    batch = torch.from_numpy(batch_np).to(device)
-                    logits = model(batch)                                  # (B, WINDOW)
-                    last_probs = torch.sigmoid(logits[:, -1]).cpu().numpy()
-                    t_start = WINDOW + i
-                    traj_probs[t_start : t_start + len(last_probs)] = last_probs
-
-            df.loc[idx, "p_fishing"] = traj_probs
+    # Rows we never predicted on (e.g. trajectories with < 8 points) get NaN here,
+    # which becomes pred_fishing = 0. That's fine for the report-based scoring
+    # below since those rows just look like "not predicted as fishing".
+    df["p_fishing"]    = df["pred_sum"] / df["pred_count"]
 
     df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
 
@@ -466,7 +435,7 @@ def predict_and_score_testernal(model):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seeds_results/LSTM_temporal_train_2023_val_0.5_2024_test_0.5_2024.csv"
+results_csv_path = "multi_seeds_results/BiLSTM_temporal_train_2023_val_0.5_2024_test_0.5_2024.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -492,7 +461,7 @@ for seed in SEEDS:
         torch.cuda.manual_seed_all(seed)
 
     # Fresh model / optimizer / scheduler per seed
-    model = FishingLSTM(
+    model = FishingBiLSTM(
         n_features=len(FEATURES),
         hidden=HIDDEN, n_layers=N_LAYERS,
         dropout=DROPOUT, dense=DENSE,
@@ -501,7 +470,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/seed/model_lstm_seed{seed}_temp_split.pt"
+    model_name = f"models/seed/model_bilstm_seed{seed}_temp_split.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -520,7 +489,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_LSTM_seed{seed}_temp_split.csv", index=False
+            f"training_stats/training_history_BiLSTM_seed{seed}_temp_split.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
@@ -535,10 +504,9 @@ for seed in SEEDS:
     # Reload best checkpoint for evaluation
     model.load_state_dict(torch.load(model_name, map_location=device))
     
-    
     # testernal 2025_1_3 test — the metric that matters
-    test = predict_and_score_testernal(model)
-    print(f"[seed {seed}] TEST on test vessels 2024 | "
+    test = predict_and_score_external(model)
+    print(f"[seed {seed}] TEST on test vessels from 2024 | "
           f"precision {test['test_precision']:.3f} "
           f"recall {test['test_recall']:.3f} "
           f"specificity {test['test_specificity']:.3f} "
@@ -570,13 +538,12 @@ print("\n========== SUMMARY ==========")
 print(df_res.to_string(index=False))
 
 metric_cols = [
-    "int_loss", "int_f1", "int_precision", "int_recall", "int_accuracy",
     "test_loss", "test_f1", "test_precision", "test_recall", "test_specificity", "test_accuracy",
 ]
 summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seeds_results/LSTM_seed_results_summary.csv")
+summary.to_csv("multi_seeds_results/BiLSTM_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seeds_results/LSTM_seed_results_summary.csv")
+print(f"Summary:       multi_seeds_results/BiLSTM_seed_results_summary.csv")

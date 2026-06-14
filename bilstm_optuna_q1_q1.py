@@ -353,7 +353,7 @@ study = optuna.create_study(
     sampler=optuna.samplers.TPESampler(seed=42),
 )
  
-study.optimize(objective, n_trials=6, show_progress_bar=False)
+study.optimize(objective, n_trials=36, show_progress_bar=False)
  
 print("\n=== BEST ===")
 print("val_loss:", study.best_value)
