@@ -35,11 +35,21 @@ def all_mmsis_in(files):
     for f in files:
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
+
+def get_val_mmsis(path="../split_mmsis_val_test.csv"):
+    split_df = pd.read_csv(path)
+    val_mmsi = set(
+        split_df.loc[
+            split_df["split"] == "validation",
+            "mmsi"
+        ]
+    )
+    return val_mmsi
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
-# validation mmsis from the whole of 2024, find those who are in val_files
+# validation mmsis from the whole of 2024 so we dont validate on the mmsis saved for testing only
 train_mmsi = all_mmsis_in(TRAIN_FILES)
-val_mmsi   = all_mmsis_in(VAL_FILES)
+val_mmsi   = get_val_mmsis()
 print(f"Train (Q1 2023) vessels: {len(train_mmsi)} | Val (Q1 2024) vessels: {len(val_mmsi)}")
 print(f"Vessels present in both quarters (expected, fine): "
       f"{len(train_mmsi & val_mmsi)}")
