@@ -30,11 +30,11 @@ split_path = "../split_mmsis_val_test.csv"
 
 mmsi_split = pd.DataFrame({
     "mmsi": (
-        + list(val_mmsi)
+        list(val_mmsi)
         + list(test_mmsi)
     ),
     "split": (
-        + ["validation"] * len(val_mmsi)
+        ["validation"] * len(val_mmsi)
         + ["test"] * len(test_mmsi)
     ),
 })
