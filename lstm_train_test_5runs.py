@@ -294,11 +294,20 @@ def run_epoch(model, loader, optimizer=None, train=False):
 # (mu/sigma are seed-independent, so this is safe)
 # ============================================================
 
+test_mmsi_list = list(test_mmsi)
+
 print(f"Preparing test set: {VAL_TEST_FILES}")
-df_test = pd.concat(
-    [pd.read_parquet(f) for f in VAL_TEST_FILES], ignore_index=True
-)
-df_test = df_test[df_test["mmsi"].isin(test_mmsi)]
+
+dfs = []
+for f in VAL_TEST_FILES:
+    df_part = pd.read_parquet(
+        f,
+        engine="pyarrow",
+        filters=[("mmsi", "in", test_mmsi_list)]
+    )
+    dfs.append(df_part)
+
+df_test = pd.concat(dfs, ignore_index=True)
 
 # Load the test set for finding the loss
 
