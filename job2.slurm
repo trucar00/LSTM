@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=GPUQ
-#SBATCH --gres=gpu:1
-#SBATCH --time=12:00:00
+#SBATCH --partition=CPUQ
+##SBATCH --gres=gpu:1
+#SBATCH --time=6:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=multi_seeds_result/output_BILSTM_NEW_RULE_NO_DIST_%j.txt    # Log file
-#SBATCH --job-name=SEED_BILSTM_NEW_RULE_NO_DIST
+#SBATCH --output=three_months/output_concat_feats_2023_new_rules_%j.txt    # Log file
+#SBATCH --job-name=concat_feats_2023
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -38,4 +38,3 @@ nvidia-smi
 
 # Run your script
 python -u features_2_conf_big.py
-python -u model2_big_10runs.py

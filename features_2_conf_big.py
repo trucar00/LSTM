@@ -184,7 +184,7 @@ def check_speed(df):
 
 
 def concat():
-    for i in range(1, 3+1, 3):
+    for i in range(1, 12+1, 3):
         
         for year in range(2023, 2023+1):
             dfs = []
@@ -207,7 +207,7 @@ def concat2():
 
 def main(online):
     for year in range(2023, 2023+1):
-        for i in range(1, 3+1, 3):
+        for i in range(1, 12+1, 3):
             df = pd.read_parquet(f"three_months/all_gear_new_rule/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = column_fixing(df)
@@ -218,7 +218,7 @@ def main(online):
             # CHANFE CHANFE ACCORDING TO WHAT TYPE
 
 if __name__ == "__main__":
-    #concat()
+    concat()
     main(online=True)
     
     #concat2()
