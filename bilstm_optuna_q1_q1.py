@@ -26,6 +26,8 @@ VAL_FILES   = ["three_months/feats_new_rule_bilstm/2024_1_3_feats.parquet"]  # Q
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
+needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
+
 SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
@@ -55,7 +57,7 @@ assert train_mmsis.isdisjoint(val_mmsis), "Train/val MMSIs overlap!"
 assert train_mmsis.isdisjoint(test_mmsis), "Train/test MMSIs overlap!"
 
 print(f"Train (Q1 2023) all vessels: {len(train_mmsis)} | Val (Q1 2024) only validation vessels: {len(val_mmsis)}")
-print(f"Vessels present in both quarters (expected, fine): "
+print(f"Are there vessels in both train and val?: "
       f"{len(train_mmsis & val_mmsis)}")
 
 # ------------------------------------------------------------------
@@ -71,9 +73,9 @@ else:
     sum_x  = pd.Series(0.0, index=FEATURES)
     sum_x2 = pd.Series(0.0, index=FEATURES)
     count = 0
-    needed_cols = ["date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
+        df = df[df["mmsi"].isin(train_mmsis)]
         df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
         month = df["date_time_utc"].dt.month
         df["month_sin"] = np.sin(2 * np.pi * month / 12)
@@ -192,7 +194,8 @@ print("Using device:", device)
  
 neg, pos = 0, 0
 for f in TRAIN_FILES:
-    df_tmp = pd.read_parquet(f, columns=["sample_weight", "y_train"])
+    df_tmp = pd.read_parquet(f, columns=["mmsi", "sample_weight", "y_train"])
+    df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsis)]
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
     neg += (df_tmp["y_train"] == 0).sum()
     pos += (df_tmp["y_train"] == 1).sum()

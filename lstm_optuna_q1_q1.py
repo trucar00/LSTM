@@ -61,7 +61,7 @@ assert train_mmsis.isdisjoint(test_mmsis), "Train/test MMSIs overlap!"
 print(f"MMSIs in training file: {len(train_mmsis)}")
 
 print(f"Train (Q1 2023) vessels: {len(train_mmsis)} | Val (Q1 2024 val only mmsis) vessels: {len(val_mmsis)}")
-print(f"Vessels present in both quarters (expected, fine): "
+print(f"Are there vessels in both train and val?: "
       f"{len(train_mmsis & val_mmsis)}")
 
 # ------------------------------------------------------------------
