@@ -6,8 +6,8 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=64G             # GB memory
-#SBATCH --output=tuning_DONE/output_optuna_BILSTM_Q1-23_Q1-24_unseen%j.txt    # Log file
-#SBATCH --job-name=optuna_BILSTM_temporal_split
+#SBATCH --output=tuning_FINAL/output_optuna_BiLSTM_2023_%j.txt    # Log file
+#SBATCH --job-name=optuna_BILSTM_2023_excluded_val_test_vessels
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

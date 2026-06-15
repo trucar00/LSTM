@@ -50,8 +50,8 @@ GLOB_test_mmsis = get_global_val_test_mmsis(which="test")
 all_mmsis_in_tuning = all_mmsis_in(TUNING_FILES)
 
 tuning_mmsis = all_mmsis_in_tuning - GLOB_val_mmsis - GLOB_test_mmsis
-assert tuning_mmsis.isdisjoint(GLOB_val_mmsis), "Train/val MMSIs overlap!"
-assert tuning_mmsis.isdisjoint(GLOB_test_mmsis), "Train/test MMSIs overlap!"
+assert tuning_mmsis.isdisjoint(GLOB_val_mmsis), "Tuning MMSIS include val MMSIs!"
+assert tuning_mmsis.isdisjoint(GLOB_test_mmsis), "Tuning MMSIS include test MMSIs!"
 
 print(f"MMSIs available for tuning after excluding val/test mmsis training file: {len(tuning_mmsis)}")
 
