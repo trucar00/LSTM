@@ -3,17 +3,6 @@ import numpy as np
 
 GEAR_TYPE_FILE = ["Not", "Krokredskap", "Traps", "Garn", "Trål", "Snurrevad"]
 
-GEAR_DICT = {
-    "Not": set(),
-    "Krokredskap": set(),
-    "Garn": set(),
-    "Trål": set(),
-    "Traps": set(),
-    "Snurrevad": set()
-}
-
-TOTAL_MMSIS = set()
-
 
 def mmsis_per_gear_type(df, gear, year, month1, month2):
     mmsis = set(df["mmsi"].dropna().unique())
@@ -27,7 +16,17 @@ def print_total_mmsis_per_gear(gear_dict):
     return 0
 
 def main():
-    for year in range(2024, 2024+1):
+    for year in range(2023, 2025+1):
+        GEAR_DICT = {
+            "Not": set(),
+            "Krokredskap": set(),
+            "Garn": set(),
+            "Trål": set(),
+            "Traps": set(),
+            "Snurrevad": set()
+        }
+
+        TOTAL_MMSIS = set()
         print("CHECKING GEAR COUNT FOR ", year)
         for i in range(1, 12+1, 3):
 
@@ -41,7 +40,7 @@ def main():
         print_total_mmsis_per_gear(GEAR_DICT)
         print(f"TOTAL MMSIS in {year}: {len(TOTAL_MMSIS)}")
 
-    mmsis = np.array(list(TOTAL_MMSIS))
+    """ mmsis = np.array(list(TOTAL_MMSIS))
     split_rng = np.random.default_rng(10)
     split_rng.shuffle(mmsis)
     n = len(mmsis)
@@ -82,7 +81,7 @@ def main():
     })
 
     print(df_mmsis.head())
-    df_mmsis.to_csv("../train_val_test_mmsis_FINAL.csv", index=False)
+    df_mmsis.to_csv("../train_val_test_mmsis_FINAL.csv", index=False) """
    
 
 if __name__ == "__main__":
