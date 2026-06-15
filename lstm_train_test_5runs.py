@@ -82,7 +82,7 @@ MAX_EPOCHS = 15
 PATIENCE = 3
 
 FOLDER = "training_FINAL/"
-TAG = "bilstm_train_2023_val_test_2024"
+TAG = "lstm_train_2023_val_test_2024"
 
 def all_mmsis_in(files):
     s = set()
@@ -495,7 +495,7 @@ def predict_and_score_testernal(model, seen):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = "multi_seeds_results/LSTM_temporal_train_2023_val_0.5_2024_test_0.5_2024.csv"
+results_csv_path = f"{FOLDER}/LSTM_seeded_results.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -530,7 +530,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/seed/model_lstm_seed{seed}_temp_split.pt"
+    model_name = f"models/seed/model_lstm_seed{seed}_test_final.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -549,7 +549,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_LSTM_seed{seed}_temp_split.csv", index=False
+            f"training_stats/training_history_LSTM_seed{seed}_test_final.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
@@ -569,19 +569,30 @@ for seed in SEEDS:
     torch.cuda.empty_cache()
     
     # testernal 2025_1_3 test — the metric that matters
-    test = predict_and_score_testernal(model)
-    print(f"[seed {seed}] TEST on test vessels 2024 | "
-          f"precision {test['test_precision']:.3f} "
-          f"recall {test['test_recall']:.3f} "
-          f"specificity {test['test_specificity']:.3f} "
-          f"f1 {test['test_f1']:.3f} "
-          f"accuracy {test['test_accuracy']:.3f} ")
+    test_unseen = predict_and_score_testernal(model, seen=False)
+
+    print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
+          f"precision {test_unseen['unseen_precision']:.3f} "
+          f"recall {test_unseen['unseen_recall']:.3f} "
+          f"specificity {test_unseen['unseen_specificity']:.3f} "
+          f"f1 {test_unseen['unseen_f1']:.3f} "
+          f"accuracy {test_unseen['unseen_accuracy']:.3f} ")
+    
+    test_seen = predict_and_score_testernal(model, seen=True)
+
+    print(f"[seed {seed}] TEST on SEEN vessels in 2024 | "
+          f"precision {test_seen['seen_precision']:.3f} "
+          f"recall {test_seen['seen_recall']:.3f} "
+          f"specificity {test_seen['seen_specificity']:.3f} "
+          f"f1 {test_seen['seen_f1']:.3f} "
+          f"accuracy {test_seen['seen_accuracy']:.3f} ")
 
     row = {
         "seed": seed,
         "best_val_loss": best_val,
         "epochs_trained": len(history),
-        **test,
+        **test_unseen,
+        **test_seen,
     }
     all_results.append(row)
 
@@ -602,12 +613,13 @@ print("\n========== SUMMARY ==========")
 print(df_res.to_string(index=False))
 
 metric_cols = [
-    "test_loss", "test_f1", "test_precision", "test_recall", "test_specificity", "test_accuracy",
+    "seen_loss", "seen_f1", "seen_precision", "seen_recall", "seen_specificity", "seen_accuracy",
+    "unseen_loss", "unseen_f1", "unseen_precision", "unseen_recall", "unseen_specificity", "unseen_accuracy",
 ]
 summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv("multi_seeds_results/LSTM_seed_results_summary.csv")
+summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       multi_seeds_results/LSTM_seed_results_summary.csv")
+print(f"Summary:       {FOLDER}/LSTM_seed_results_summary.csv")

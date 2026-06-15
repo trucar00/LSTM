@@ -519,7 +519,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/seed/model_bilstm_seed{seed}_temp_unseen_split.pt"
+    model_name = f"models/seed/model_bilstm_seed{seed}_final.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -538,7 +538,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_BiLSTM_seed{seed}_temp_unseen_split.csv", index=False
+            f"training_stats/training_history_BiLSTM_seed{seed}_final.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
