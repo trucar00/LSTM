@@ -42,7 +42,7 @@ def main():
         print(f"TOTAL MMSIS in {year}: {len(TOTAL_MMSIS)}")
 
     mmsis = np.array(list(TOTAL_MMSIS))
-    split_rng = np.random.default_rng(5)
+    split_rng = np.random.default_rng(10)
     split_rng.shuffle(mmsis)
     n = len(mmsis)
     train_mmsi = set(mmsis[:int(0.70 * n)])
