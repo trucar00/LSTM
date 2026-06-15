@@ -62,6 +62,27 @@ def main():
         print(f"Train:      {len(train_mmsis_in_gear)}")
         print(f"Validation: {len(val_mmsis_in_gear)}")
         print(f"Test:       {len(test_mmsis_in_gear)}")
+
+    print("-" * 40)
+    print("Train total: ", len(train_mmsi))
+    print("Val total: ", len(val_mmsi))
+    print("Test total: ", len(test_mmsi))
+
+    df_mmsis = pd.DataFrame({
+        "mmsi": np.concatenate([
+            list(train_mmsi),
+            list(val_mmsi),
+            list(test_mmsi),
+        ]),
+        "split": (
+            ["train"] * len(train_mmsi)
+            + ["validation"] * len(val_mmsi)
+            + ["test"] * len(test_mmsi)
+        ),
+    })
+
+    print(df_mmsis.head())
+    df_mmsis.to_csv("../train_val_test_mmsis_FINAL.csv", index=False)
    
 
 if __name__ == "__main__":
