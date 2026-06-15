@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account=share-ie-idi
-#SBATCH --partition=CPUQ
-##SBATCH --gres=gpu:1
-#SBATCH --time=00:30:00
+#SBATCH --partition=GPUQ
+#SBATCH --gres=gpu:1
+#SBATCH --time=6:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=64G             # GB memory
-#SBATCH --output=three_months/remove_overlap_traj_%j.txt    # Log file
-#SBATCH --job-name=overlap_trajs
+#SBATCH --mem=128G             # GB memory
+#SBATCH --output=training_FINAL/output_LSTM_%j.txt    # Log file
+#SBATCH --job-name=LSTM_train_2023_test_seen_unseen
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -37,5 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u features_2_conf_big.py
-python -u drop_trajectories_spanning_quarters.py
+python -u lstm_train_test_5runs.py

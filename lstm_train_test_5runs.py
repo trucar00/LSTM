@@ -13,7 +13,7 @@ from sklearn.metrics import log_loss
 import gc
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_temporal/best_params_LSTM_Q1-23_train_Q1-24_val.json")
+tuned_params_path = Path("tuning_FINAL/TUNED_PARAM_FILE.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -53,8 +53,21 @@ TRAIN_FILES = [
 VAL_TEST_FILES = [
     f"{BASE}/2024_1_3_feats.parquet",     # Q1 2024
     f"{BASE}/2024_4_6_feats.parquet",     # Q2 2024
-    f"{BASE}/2024_7_9_feats.parquet",     # Q3 2024
-    f"{BASE}/2024_10_12_feats.parquet",   # Q4 2024
+]
+
+
+# TRAIN: all of 2023
+TRAIN_FILES = [
+    f"{BASE}/2023_1_3_feats.parquet",     # Q1 2023
+    f"{BASE}/2023_4_6_feats.parquet",     # Q2 2023
+    f"{BASE}/2023_7_9_feats.parquet",     # Q3 2023
+    f"{BASE}/2023_10_12_feats.parquet",   # Q4 2023
+]
+
+# VALIDATION and TEST on 2024. We have MMSIS for validation and MMSIS for testing
+VAL_TEST_FILES = [
+    f"{BASE}/2024_1_3_feats.parquet",     # Q1 2024
+    f"{BASE}/2024_4_6_feats.parquet",     # Q2 2024
 ]
 
 
@@ -64,12 +77,12 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1]
+SEEDS = [0, 1] # ADD MORE SEEDS
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_temporal/"
-TAG = "all_2023_online"
+FOLDER = "training_FINAL/"
+TAG = "bilstm_train_2023_val_test_2024"
 
 def all_mmsis_in(files):
     s = set()
@@ -77,15 +90,18 @@ def all_mmsis_in(files):
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
 
-def get_val_test_mmsis(test_or_val, path="../split_mmsis_val_test.csv"):
+def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
-    return set(split_df.loc[split_df["split"] == test_or_val, "mmsi"])
+    return set(split_df.loc[split_df["split"] == which, "mmsi"])
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
-train_mmsi = all_mmsis_in(TRAIN_FILES)
-val_mmsi = get_val_test_mmsis(test_or_val="validation")
-test_mmsi = get_val_test_mmsis(test_or_val="test")
-print(f"Train (all 2023) vessels: {len(train_mmsi)} | Val (2024) vessels: {len(val_mmsi)} | Test (2024) vessels: {len(test_mmsi)}")
+val_mmsis = get_global_val_test_mmsis(which="validation")
+test_mmsis = get_global_val_test_mmsis(which="test")
+all_mmsis_in_train = all_mmsis_in(TRAIN_FILES)
+train_mmsis = all_mmsis_in_train - val_mmsis - test_mmsis
+assert train_mmsis.isdisjoint(val_mmsis), "Train/val MMSIs overlap!"
+assert train_mmsis.isdisjoint(test_mmsis), "Train/test MMSIs overlap!"
+print(f"Train (all 2023) vessels: {len(train_mmsis)} | Val (2024) vessels: {len(val_mmsis)} | Test (2024) vessels: {len(test_mmsis)}")
 
 # ------------------------------------------------------------------
 # Normalization stats -- fit on TRAIN (2023) only
@@ -207,9 +223,9 @@ class FishingLSTM(nn.Module):
 # Loaders + device + class imbalance (all fixed across seeds)
 # ============================================================
 
-train_ds = AISWindowDataset(TRAIN_FILES, train_mmsi, FEATURES, mu, sigma,
+train_ds = AISWindowDataset(TRAIN_FILES, train_mmsis, FEATURES, mu, sigma,
                             shuffle_files=True, stride=STRIDE, window=WINDOW)
-val_ds   = AISWindowDataset(VAL_TEST_FILES, val_mmsi, FEATURES, mu, sigma,
+val_ds   = AISWindowDataset(VAL_TEST_FILES, val_mmsis, FEATURES, mu, sigma,
                             stride=STRIDE, window=WINDOW)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
@@ -232,7 +248,7 @@ pos = 0
 cols_w = ["mmsi", "sample_weight", "y_train"]
 for f in TRAIN_FILES:
     df_tmp = pd.read_parquet(f, columns=cols_w)
-    #df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsi)].copy()
+    df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsis)]
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
     neg += (df_tmp["y_train"] == 0).sum()
     pos += (df_tmp["y_train"] == 1).sum()
@@ -295,9 +311,7 @@ def run_epoch(model, loader, optimizer=None, train=False):
 # (mu/sigma are seed-independent, so this is safe)
 # ============================================================
 
-test_mmsi_list = list(test_mmsi)
-
-print(f"Preparing test set: {VAL_TEST_FILES}")
+print(f"Preparing seen and unseen test set from: {VAL_TEST_FILES}")
 
 TEST_COLUMNS = list(dict.fromkeys([
     "mmsi",
@@ -309,51 +323,61 @@ TEST_COLUMNS = list(dict.fromkeys([
     *BASE_FEATURES,
 ]))
 
-dfs = []
+# TEST ON FUTURE UNSEEN VESSELS
 
-for f in VAL_TEST_FILES:
-    df_part = pd.read_parquet(
-        f,
-        engine="pyarrow",
-        columns=TEST_COLUMNS,
-        filters=[("mmsi", "in", test_mmsi_list)],
-    )
-    dfs.append(df_part)
+def get_test_df(files, mmsi_list):
+    dfs = []
 
-df_test = pd.concat(dfs, ignore_index=True, copy=False)
+    for f in files:
+        df_part = pd.read_parquet(
+            f,
+            engine="pyarrow",
+            columns=TEST_COLUMNS,
+            filters=[("mmsi", "in", mmsi_list)],
+        )
+        dfs.append(df_part)
 
-del dfs, df_part
-gc.collect()
+    df = pd.concat(dfs, ignore_index=True, copy=False)
 
-# Load the test set for finding the loss
+    del dfs, df_part
+    gc.collect()
+    return df
+
+def prepare_test_df(df):
+    df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
+    _month = df["date_time_utc"].dt.month
+    df["month_sin"] = np.sin(2 * np.pi * _month / 12)
+    df["month_cos"] = np.cos(2 * np.pi * _month / 12)
+    for col in FEATURES:
+        df[col] = (df[col] - mu[col]) / sigma[col]
+    df["ra_accel"] = df["ra_accel"].clip(-5, 5)
+    df["ra_jerk"]  = df["ra_jerk"].clip(-5, 5)
+    df["ra_dcog"]  = df["ra_dcog"].clip(-5, 5)
+
+    return df.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
+
+# TEST on future UNSEEN vessels -> foreign vessels (russian fex)
+test_mmsi_list = list(test_mmsis)
+df_test = get_test_df(VAL_TEST_FILES, test_mmsi_list)
+df_test = prepare_test_df(df_test)
+
+# TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
+train_mmsi_list = list(train_mmsis)
+df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
+df_test_seen = prepare_test_df(df_test_seen)
 
 
-df_test["date_time_utc"] = pd.to_datetime(df_test["date_time_utc"])
-_month = df_test["date_time_utc"].dt.month
-df_test["month_sin"] = np.sin(2 * np.pi * _month / 12)
-df_test["month_cos"] = np.cos(2 * np.pi * _month / 12)
-for col in FEATURES:
-    df_test[col] = (df_test[col] - mu[col]) / sigma[col]
-df_test["ra_accel"] = df_test["ra_accel"].clip(-5, 5)
-df_test["ra_jerk"]  = df_test["ra_jerk"].clip(-5, 5)
-df_test["ra_dcog"]  = df_test["ra_dcog"].clip(-5, 5)
-df_test = df_test.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
-df_test[FEATURES] = df_test[FEATURES].astype(np.float32)
+INFER_BATCH = 128   # how many "ending-at-t" windows to forward in one pass
 
-lens = df_test.groupby("trajectory_id").size()
-short = lens < WINDOW
-print("frac of trajectories:", short.mean())
-print("frac of positions:   ", lens[short].sum() / lens.sum())
+def predict_and_score_testernal(model, seen):
 
-INFER_BATCH = 32   # how many "ending-at-t" windows to forward in one pass
+    if seen:
+        df = df_test_seen
+        prefix = "seen"
+    else:
+        df = df_test
+        prefix = "unseen"
 
-def predict_and_score_testernal(model):
-    df = df_test
-    df.drop(
-        columns=["p_fishing", "pred_fishing"],
-        errors="ignore",
-        inplace=True,
-    )
     df["p_fishing"] = np.nan
 
     model.eval()
@@ -396,82 +420,75 @@ def predict_and_score_testernal(model):
             df.loc[idx, "p_fishing"] = traj_probs
 
     df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
+    pred_fishing = df["pred_fishing"].to_numpy(copy=False)
+    p_fishing = df["p_fishing"].to_numpy(copy=False)
 
-    eval_mask = (
-            (df["sample_weight"] == 1)
-            & df["p_fishing"].notna()
-        )
-    
+    sample_weight = df["sample_weight"].to_numpy(copy=False)
+    y_train = df["y_train"].to_numpy(copy=False)
+    report = df["report"].to_numpy(copy=False)
 
-    y_true = df.loc[eval_mask, "y_train"].to_numpy(dtype=int)
-    y_prob = df.loc[eval_mask, "p_fishing"].to_numpy()
+    eval_mask = (sample_weight == 1)
 
-    test_logloss = log_loss(
-        y_true,
-        y_prob,
-        labels=[0, 1],
-    )
+    y_true = y_train[eval_mask].astype(np.uint8, copy=False)
+    y_prob = p_fishing[eval_mask]
 
-    pred_pos = df["pred_fishing"] == 1
+    test_logloss = log_loss(y_true, y_prob, labels=[0, 1])
+
+    pred_pos = pred_fishing == 1
     pred_neg = ~pred_pos
 
-    is_fishing = df["report"] == "fishing"
-    is_no_fishing = df["report"] == "conf_no_fishing"
-    is_unknown = df["report"] == "unknown"
+    fishing = report == "fishing"
+    no_fishing = report == "conf_no_fishing"
+    unknown = report == "unknown"
 
-    tp = int((pred_pos & is_fishing).sum())
-    fp = int((pred_pos & is_no_fishing).sum())
-    tn = int((pred_neg & is_no_fishing).sum())
-    fn = int((pred_neg & is_fishing).sum())
+    tp = int(np.sum(pred_pos & fishing))
+    fp = int(np.sum(pred_pos & no_fishing))
+    tn = int(np.sum(pred_neg & no_fishing))
+    fn = int(np.sum(pred_neg & fishing))
 
-    n_pred_fish = int(pred_pos.sum())
-    n_pred_no_fish = int(pred_neg.sum())
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    specificity = tn / (tn + fp) if tn + fp else 0.0
+    accuracy = (
+        (tp + tn) / (tp + tn + fp + fn)
+        if tp + tn + fp + fn
+        else 0.0
+    )
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall
+        else 0.0
+    )
 
-    n_reported_fish = int(is_fishing.sum())
-    n_reported_conf_no_fish = int(is_no_fishing.sum())
-
-    n_unknown = int(is_unknown.sum())
-    n_pred_fish_of_unknown = int((pred_pos & is_unknown).sum())
-    n_pred_no_fish_of_unknown = int((pred_neg & is_unknown).sum())
-
-    # Precision of confirmed.
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-
-    # Accuracy of confirmed.
-    accuracy = (tp + tn) / (tp + tn + fp +fn) if (tp + tn + fp +fn) > 0 else 0.0
-
-    # Recall (sensitvity)
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-
-    # Specificity, true negative rate, on confirmed non-fishing rows
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-
-    # F1 Score
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     del df
     gc.collect()
 
-
-    return {
-        "test_tp":                  tp,
-        "test_fp":                  fp,
-        "test_tn":                  tn,
-        "test_fn":                  fn,
-        "test_accuracy":            accuracy,
-        "test_recall":              recall,
-        "test_specificity":         specificity,
-        "test_precision":           precision,           
-        "test_f1":                  f1,
-        "test_loss":                test_logloss,
-        "test_n_pred_fish":         n_pred_fish,
-        "test_n_pred_no_fish":      n_pred_no_fish,
-        "test_n_reported_fish":     n_reported_fish,
-        "test_n_reported_no_fish":  n_reported_conf_no_fish,
-        "test_n_unknowns":          n_unknown,
-        "test_n_pred_fish_of_unknown": n_pred_fish_of_unknown,
-        "test_n_pred_no_fish_of_unknown": n_pred_no_fish_of_unknown
+    result = {
+        f"{prefix}_tp": tp,
+        f"{prefix}_fp": fp,
+        f"{prefix}_tn": tn,
+        f"{prefix}_fn": fn,
+        f"{prefix}_accuracy": accuracy,
+        f"{prefix}_recall": recall,
+        f"{prefix}_specificity": specificity,
+        f"{prefix}_precision": precision,
+        f"{prefix}_f1": f1,
+        f"{prefix}_loss": test_logloss,
+        f"{prefix}_n_pred_fish": int(pred_pos.sum()),
+        f"{prefix}_n_pred_no_fish": int(pred_neg.sum()),
+        f"{prefix}_n_reported_fish": int(fishing.sum()),
+        f"{prefix}_n_reported_no_fish": int(no_fishing.sum()),
+        f"{prefix}_n_unknowns": int(unknown.sum()),
+        f"{prefix}_n_pred_fish_of_unknown": int(
+            np.sum(pred_pos & unknown)
+        ),
+        f"{prefix}_n_pred_no_fish_of_unknown": int(
+            np.sum(pred_neg & unknown)
+        ),
     }
+
+    return result
 
 
 # ============================================================
