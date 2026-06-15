@@ -1,5 +1,3 @@
-
-
 import os
 import json
 import pickle
@@ -11,6 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, IterableDataset
 from sklearn.metrics import log_loss
 import gc
+import random
 
 # Load tuned parameters
 tuned_params_path = Path("tuning_FINAL/FILE_NAME.json")
@@ -53,6 +52,8 @@ TRAIN_FILES = [
 VAL_TEST_FILES = [
     f"{BASE}/2024_1_3_feats.parquet",     # Q1 2024
     f"{BASE}/2024_4_6_feats.parquet",     # Q2 2024
+    f"{BASE}/2024_7_9_feats.parquet",     # Q3 2024
+    f"{BASE}/2024_10_12_feats.parquet",   # Q4 2024
 ]
 
 
@@ -72,11 +73,14 @@ TAG = "bilstm_train_2023_val_test_2024"
 def all_mmsis_in(files):
     s = set()
     for f in files:
-        s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
+        mmsis = pd.read_parquet(f, columns=["mmsi"])["mmsi"]
+        mmsis = pd.to_numeric(mmsis, errors="coerce").dropna().astype("int64")
+        s.update(mmsis.unique())
     return s
 
 def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
+    split_df["mmsi"] = split_df["mmsi"].astype("int64")
     return set(split_df.loc[split_df["split"] == which, "mmsi"])
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
@@ -288,13 +292,10 @@ def run_epoch(model, loader, optimizer=None, train=False):
 
 
 # ============================================================
-# Pre-normalize the 2025 testernal test file ONCE
-# (mu/sigma are seed-independent, so this is safe)
+#
 # ============================================================
 
-test_mmsi_list = list(test_mmsis)
-
-print(f"Preparing test set from: {VAL_TEST_FILES}")
+print(f"Preparing seen and unseen test set from: {VAL_TEST_FILES}")
 
 TEST_COLUMNS = list(dict.fromkeys([
     "mmsi",
@@ -306,40 +307,24 @@ TEST_COLUMNS = list(dict.fromkeys([
     *BASE_FEATURES,
 ]))
 
-# TEST ON FUTURE UNSEEN VESSELS
-dfs = []
 
-for f in VAL_TEST_FILES:
-    df_part = pd.read_parquet(
-        f,
-        engine="pyarrow",
-        columns=TEST_COLUMNS,
-        filters=[("mmsi", "in", test_mmsi_list)],
-    )
-    dfs.append(df_part)
+def get_test_df(files, mmsi_list):
+    dfs = []
 
-df_test = pd.concat(dfs, ignore_index=True, copy=False)
+    for f in files:
+        df_part = pd.read_parquet(
+            f,
+            engine="pyarrow",
+            columns=TEST_COLUMNS,
+            filters=[("mmsi", "in", mmsi_list)],
+        )
+        dfs.append(df_part)
 
-del dfs, df_part
-gc.collect()
+    df = pd.concat(dfs, ignore_index=True, copy=False)
 
-# TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
-train_mmsi_list = list(train_mmsis)
-dfs = []
-
-for f in VAL_TEST_FILES:
-    df_part = pd.read_parquet(
-        f,
-        engine="pyarrow",
-        columns=TEST_COLUMNS,
-        filters=[("mmsi", "in", train_mmsi_list)],
-    )
-    dfs.append(df_part)
-
-df_test_seen = pd.concat(dfs, ignore_index=True, copy=False)
-
-del dfs, df_part
-gc.collect()
+    del dfs, df_part
+    gc.collect()
+    return df
 
 def prepare_test_df(df):
     df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
@@ -351,9 +336,18 @@ def prepare_test_df(df):
     df["ra_accel"] = df["ra_accel"].clip(-5, 5)
     df["ra_jerk"]  = df["ra_jerk"].clip(-5, 5)
     df["ra_dcog"]  = df["ra_dcog"].clip(-5, 5)
+
     return df.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
 
-df_test      = prepare_test_df(df_test)
+# TEST on future UNSEEN vessels -> simulate predicting on foreign vessels (russian fex)
+test_mmsi_list = list(test_mmsis)
+df_test = get_test_df(VAL_TEST_FILES, test_mmsi_list)
+df_test = prepare_test_df(df_test)
+
+# TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
+random.seed(42)
+train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 2)
+df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
 df_test_seen = prepare_test_df(df_test_seen)
 
 

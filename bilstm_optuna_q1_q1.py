@@ -34,11 +34,14 @@ needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
 def all_mmsis_in(files):
     s = set()
     for f in files:
-        s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
+        mmsis = pd.read_parquet(f, columns=["mmsi"])["mmsi"]
+        mmsis = pd.to_numeric(mmsis, errors="coerce").dropna().astype("int64")
+        s.update(mmsis.unique())
     return s
 
 def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
+    split_df["mmsi"] = split_df["mmsi"].astype("int64")
     mmsis = set(split_df.loc[split_df["split"] == which,"mmsi"])
     return mmsis
  

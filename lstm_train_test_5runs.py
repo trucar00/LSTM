@@ -1,5 +1,3 @@
-
-
 import os
 import json
 import pickle
@@ -11,9 +9,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, IterableDataset
 from sklearn.metrics import log_loss
 import gc
+import random
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_FINAL/TUNED_PARAM_FILE.json")
+tuned_params_path = Path("tuning_FINAL/best_params_LSTM_tune_q1-q3-2023.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -53,23 +52,9 @@ TRAIN_FILES = [
 VAL_TEST_FILES = [
     f"{BASE}/2024_1_3_feats.parquet",     # Q1 2024
     f"{BASE}/2024_4_6_feats.parquet",     # Q2 2024
+    f"{BASE}/2024_7_9_feats.parquet",     # Q3 2024
+    f"{BASE}/2024_10_12_feats.parquet",   # Q4 2024
 ]
-
-
-# TRAIN: all of 2023
-TRAIN_FILES = [
-    f"{BASE}/2023_1_3_feats.parquet",     # Q1 2023
-    f"{BASE}/2023_4_6_feats.parquet",     # Q2 2023
-    f"{BASE}/2023_7_9_feats.parquet",     # Q3 2023
-    f"{BASE}/2023_10_12_feats.parquet",   # Q4 2023
-]
-
-# VALIDATION and TEST on 2024. We have MMSIS for validation and MMSIS for testing
-VAL_TEST_FILES = [
-    f"{BASE}/2024_1_3_feats.parquet",     # Q1 2024
-    f"{BASE}/2024_4_6_feats.parquet",     # Q2 2024
-]
-
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
@@ -77,7 +62,7 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1] # ADD MORE SEEDS
+SEEDS = [0, 1, 2, 3, 4] 
 MAX_EPOCHS = 15
 PATIENCE = 3
 
@@ -87,12 +72,16 @@ TAG = "lstm_train_2023_val_test_2024"
 def all_mmsis_in(files):
     s = set()
     for f in files:
-        s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
+        mmsis = pd.read_parquet(f, columns=["mmsi"])["mmsi"]
+        mmsis = pd.to_numeric(mmsis, errors="coerce").dropna().astype("int64")
+        s.update(mmsis.unique())
     return s
 
 def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
-    return set(split_df.loc[split_df["split"] == which, "mmsi"])
+    split_df["mmsi"] = split_df["mmsi"].astype("int64")
+    mmsis = set(split_df.loc[split_df["split"] == which,"mmsi"])
+    return mmsis
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
 val_mmsis = get_global_val_test_mmsis(which="validation")
@@ -362,7 +351,8 @@ df_test = get_test_df(VAL_TEST_FILES, test_mmsi_list)
 df_test = prepare_test_df(df_test)
 
 # TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
-train_mmsi_list = list(train_mmsis)
+random.seed(42)
+train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 2)
 df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
 df_test_seen = prepare_test_df(df_test_seen)
 
@@ -495,7 +485,7 @@ def predict_and_score_testernal(model, seen):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = f"{FOLDER}/LSTM_seeded_results.csv"
+results_csv_path = f"{FOLDER}/LSTM_seeded_results_full.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -620,6 +610,6 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary.csv")
+summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary_full.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       {FOLDER}/LSTM_seed_results_summary.csv")
+print(f"Summary:       {FOLDER}/LSTM_seed_results_summary_full.csv")
