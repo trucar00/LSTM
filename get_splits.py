@@ -38,7 +38,7 @@ df_mmsis = pd.DataFrame({
 })
 
 print(df_mmsis.head())
-df_mmsis.to_csv("train_val_test_mmsis.csv", index=False)
+#df_mmsis.to_csv("train_val_test_mmsis.csv", index=False)
 
 print(len(train_mmsi))
 

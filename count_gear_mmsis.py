@@ -17,7 +17,7 @@ TOTAL_MMSIS = set()
 
 def mmsis_per_gear_type(df, gear, year, month1, month2):
     mmsis = set(df["mmsi"].dropna().unique())
-    print(f"Nr of mmsis registered for {gear} in {year} between month {month1} and month {month2}: {len(mmsis)}")
+    print(f"{gear} in {year} between month {month1} and month {month2}: {len(mmsis)}")
     
     return mmsis
 
@@ -27,7 +27,7 @@ def print_total_mmsis_per_gear(gear_dict):
     return 0
 
 def main():
-    for year in range(2023, 2025+1):
+    for year in range(2024, 2024+1):
         print("CHECKING GEAR COUNT FOR ", year)
         for i in range(1, 12+1, 3):
 
@@ -39,9 +39,30 @@ def main():
 
         print("PER GEAR: ")
         print_total_mmsis_per_gear(GEAR_DICT)
-        print(f"TOTAL MMSIS: {len(TOTAL_MMSIS)}")
+        print(f"TOTAL MMSIS in {year}: {len(TOTAL_MMSIS)}")
 
-    return 0
+    mmsis = np.array(list(TOTAL_MMSIS))
+    split_rng = np.random.default_rng(5)
+    split_rng.shuffle(mmsis)
+    n = len(mmsis)
+    train_mmsi = set(mmsis[:int(0.70 * n)])
+    val_mmsi   = set(mmsis[int(0.70 * n):int(0.85 * n)])
+    test_mmsi  = set(mmsis[int(0.85 * n):])
+
+    for key, values in GEAR_DICT.items():
+        train_mmsis_in_gear = values.intersection(train_mmsi)
+        val_mmsis_in_gear = values.intersection(val_mmsi)
+        test_mmsis_in_gear = values.intersection(test_mmsi)
+
+        total = len(values)
+
+        print(f"\n{key}")
+        print("-" * 40)
+        print(f"Total:      {total}")
+        print(f"Train:      {len(train_mmsis_in_gear)}")
+        print(f"Validation: {len(val_mmsis_in_gear)}")
+        print(f"Test:       {len(test_mmsis_in_gear)}")
+   
 
 if __name__ == "__main__":
     main()
