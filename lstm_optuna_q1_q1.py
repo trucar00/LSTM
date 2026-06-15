@@ -14,7 +14,7 @@ WINDOW = 256
 STRIDE = 128
 
 # TAG FOR FILES
-TAG = "LSTM_tune_q1-q3-2023"
+TAG = "LSTM_tune-2023-no-val-test"
 FOLDER = "tuning_FINAL"
 
 print("--------", TAG, "----------")
@@ -22,7 +22,10 @@ print("--------", TAG, "----------")
 # ------------------------------------------------------------------
 # Temporal split: Q1 2023 -> train, Q1 2024 val mmsis-> val
 # ------------------------------------------------------------------
-TUNING_FILES = ["three_months/feats_new_rule_online/2023_1_3_feats.parquet", "three_months/feats_new_rule_online/2023_7_9_feats.parquet"]  # Q1/Q3 2023
+TUNING_FILES = ["three_months/feats_new_rule_online/2023_1_3_feats.parquet",
+                "three_months/feats_new_rule_online/2023_4_6_feats.parquet",
+                "three_months/feats_new_rule_online/2023_7_9_feats.parquet",
+                "three_months/feats_new_rule_online/2023_10_12_feats.parquet"] 
 
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
@@ -40,7 +43,7 @@ def all_mmsis_in(files):
         s.update(mmsis.unique())
     return s
 
-def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
+def get_global_val_test_mmsis(which, path="../train_val_test_mmsis_FINAL.csv"):
     split_df = pd.read_csv(path)
     split_df["mmsi"] = split_df["mmsi"].astype("int64")
     mmsis = set(split_df.loc[split_df["split"] == which,"mmsi"])
@@ -50,9 +53,10 @@ def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
 # validation mmsis from the whole of 2024 so we dont validate on the mmsis saved for testing only
 GLOB_val_mmsis = get_global_val_test_mmsis(which="validation")
 GLOB_test_mmsis = get_global_val_test_mmsis(which="test")
+print(f"{len(GLOB_val_mmsis)} mmsis are reserved for validation, and {len(GLOB_test_mmsis)} are reserved for testing. We do not tune on these!")
 all_mmsis_in_tuning = all_mmsis_in(TUNING_FILES)
 
-tuning_mmsis = all_mmsis_in_tuning - GLOB_val_mmsis - GLOB_test_mmsis
+tuning_mmsis = all_mmsis_in_tuning - GLOB_val_mmsis - GLOB_test_mmsis # REMOVE all validation and test mmsis, so these vessel are not seen by the tuning.
 assert tuning_mmsis.isdisjoint(GLOB_val_mmsis), "Tuning MMSIS include val MMSIs!"
 assert tuning_mmsis.isdisjoint(GLOB_test_mmsis), "Tuning MMSIS include test MMSIs!"
 
