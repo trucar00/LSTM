@@ -13,7 +13,7 @@ from sklearn.metrics import log_loss
 import gc
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_DONE/best_params_BILSTM_Q1-23_train_Q1-24_val_unseen.json")
+tuned_params_path = Path("tuning_FINAL/FILE_NAME.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -53,8 +53,6 @@ TRAIN_FILES = [
 VAL_TEST_FILES = [
     f"{BASE}/2024_1_3_feats.parquet",     # Q1 2024
     f"{BASE}/2024_4_6_feats.parquet",     # Q2 2024
-    f"{BASE}/2024_7_9_feats.parquet",     # Q3 2024
-    f"{BASE}/2024_10_12_feats.parquet",   # Q4 2024
 ]
 
 
@@ -64,12 +62,12 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4]
+SEEDS = [0, 1] # ADD MORE SEEDS
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_DONE/"
-TAG = "all_2023_bilstm"
+FOLDER = "training_FINAL/"
+TAG = "bilstm_train_2023_val_test_2024"
 
 def all_mmsis_in(files):
     s = set()
@@ -77,13 +75,13 @@ def all_mmsis_in(files):
         s.update(pd.read_parquet(f, columns=["mmsi"])["mmsi"].unique())
     return s
 
-def get_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
+def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
     split_df = pd.read_csv(path)
     return set(split_df.loc[split_df["split"] == which, "mmsi"])
  
 # All vessels in each quarter (no MMSI split -- the split is by TIME).
-val_mmsis = get_val_test_mmsis(which="validation")
-test_mmsis = get_val_test_mmsis(which="test")
+val_mmsis = get_global_val_test_mmsis(which="validation")
+test_mmsis = get_global_val_test_mmsis(which="test")
 all_mmsis_in_train = all_mmsis_in(TRAIN_FILES)
 train_mmsis = all_mmsis_in_train - val_mmsis - test_mmsis
 assert train_mmsis.isdisjoint(val_mmsis), "Train/val MMSIs overlap!"
@@ -325,7 +323,7 @@ df_test = pd.concat(dfs, ignore_index=True, copy=False)
 del dfs, df_part
 gc.collect()
 
-# TEST ON FUTURE BUT SEEN VESSELS
+# TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
 train_mmsi_list = list(train_mmsis)
 dfs = []
 
@@ -357,8 +355,6 @@ def prepare_test_df(df):
 
 df_test      = prepare_test_df(df_test)
 df_test_seen = prepare_test_df(df_test_seen)
-# Load the test set for finding the loss
-
 
 
 def predict_and_score_external(model, seen):
@@ -560,21 +556,21 @@ for seed in SEEDS:
     # testernal 2025_1_3 test — the metric that matters
     test_unseen = predict_and_score_external(model, seen=False)
 
-    print(f"[seed {seed}] TEST on unseen test vessels from 2024 | "
-          f"precision {test_unseen['test_precision']:.3f} "
-          f"recall {test_unseen['test_recall']:.3f} "
-          f"specificity {test_unseen['test_specificity']:.3f} "
-          f"f1 {test_unseen['test_f1']:.3f} "
-          f"accuracy {test_unseen['test_accuracy']:.3f} ")
+    print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
+          f"precision {test_unseen['unseen_precision']:.3f} "
+          f"recall {test_unseen['unseen_recall']:.3f} "
+          f"specificity {test_unseen['unseen_specificity']:.3f} "
+          f"f1 {test_unseen['unseen_f1']:.3f} "
+          f"accuracy {test_unseen['unseen_accuracy']:.3f} ")
     
     test_seen = predict_and_score_external(model, seen=True)
 
-    print(f"[seed {seed}] TEST on unseen test vessels from 2024 | "
-          f"precision {test_seen['test_precision']:.3f} "
-          f"recall {test_seen['test_recall']:.3f} "
-          f"specificity {test_seen['test_specificity']:.3f} "
-          f"f1 {test_seen['test_f1']:.3f} "
-          f"accuracy {test_seen['test_accuracy']:.3f} ")
+    print(f"[seed {seed}] TEST on SEEN vessels in 2024 | "
+          f"precision {test_seen['seen_precision']:.3f} "
+          f"recall {test_seen['seen_recall']:.3f} "
+          f"specificity {test_seen['seen_specificity']:.3f} "
+          f"f1 {test_seen['seen_f1']:.3f} "
+          f"accuracy {test_seen['seen_accuracy']:.3f} ")
 
     row = {
         "seed": seed,
