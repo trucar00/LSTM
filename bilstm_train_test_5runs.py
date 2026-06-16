@@ -108,7 +108,10 @@ else:
     needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
+        print("mmsis in training param df before: ", df["mmsi"].nunique())
+        df["mmsi"] = df["mmsi"].astype("int64")
         df = df[df["mmsi"].isin(train_mmsis)]
+        print("mmsis in training param df after: ", df["mmsi"].nunique())
         df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
         month = df["date_time_utc"].dt.month
         df["month_sin"] = np.sin(2 * np.pi * month / 12)

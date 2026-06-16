@@ -105,7 +105,7 @@ else:
     sum_x  = pd.Series(0.0, index=FEATURES)
     sum_x2 = pd.Series(0.0, index=FEATURES)
     count = 0
-    needed_cols = ["date_time_utc"] + BASE_FEATURES
+    needed_cols = ["mmsi", "date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
         print("mmsis in training param df before: ", df["mmsi"].nunique())
