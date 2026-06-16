@@ -12,7 +12,7 @@ import gc
 import random
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_FINAL/best_params_LSTM_tune_q1-q3-2023.json")
+tuned_params_path = Path("tuning_FINAL/best_params_LSTM_tune-2023-no-val-test.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -36,7 +36,7 @@ else:
     DROPOUT  = 0.321
     BATCH    = 256
     LR       = 4.56e-4
-    #exit()
+    exit()
 
 BASE = "three_months/feats_new_rule_online"
 
@@ -66,7 +66,7 @@ SEEDS = [0, 1, 2, 3, 4]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_FINAL/"
+FOLDER = "training_FINAL"
 TAG = "lstm_train_2023_val_test_2024"
 
 def all_mmsis_in(files):
@@ -77,7 +77,7 @@ def all_mmsis_in(files):
         s.update(mmsis.unique())
     return s
 
-def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
+def get_global_val_test_mmsis(which, path="../train_val_test_mmsis_FINAL.csv"):
     split_df = pd.read_csv(path)
     split_df["mmsi"] = split_df["mmsi"].astype("int64")
     mmsis = set(split_df.loc[split_df["split"] == which,"mmsi"])
@@ -108,6 +108,10 @@ else:
     needed_cols = ["date_time_utc"] + BASE_FEATURES
     for f in TRAIN_FILES:
         df = pd.read_parquet(f, columns=needed_cols)
+        print("mmsis in training param df before: ", df["mmsi"].nunique())
+        df["mmsi"] = df["mmsi"].astype("int64")
+        df = df[df["mmsi"].isin(train_mmsis)]
+        print("mmsis in training param df after: ", df["mmsi"].nunique())
         df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
         month = df["date_time_utc"].dt.month
         df["month_sin"] = np.sin(2 * np.pi * month / 12)
@@ -309,6 +313,9 @@ TEST_COLUMNS = list(dict.fromkeys([
     "y_train",
     "sample_weight",
     "report",
+    "gear_report",
+    "lon",
+    "lat",
     *BASE_FEATURES,
 ]))
 
@@ -359,7 +366,7 @@ df_test_seen = prepare_test_df(df_test_seen)
 
 INFER_BATCH = 128   # how many "ending-at-t" windows to forward in one pass
 
-def predict_and_score_testernal(model, seen):
+def predict_and_score_testernal(model, seen, seed):
 
     if seen:
         df = df_test_seen
@@ -410,6 +417,13 @@ def predict_and_score_testernal(model, seen):
             df.loc[idx, "p_fishing"] = traj_probs
 
     df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
+
+    if seed==0:
+        if seen:
+            df.to_parquet(f"{FOLDER}/test_vessels_2024/2024_seen_test_seed{seed}.parquet", index=False)
+        else:
+            df.to_parquet(f"{FOLDER}/test_vessels_2024/2024_UNseen_test_seed{seed}.parquet", index=False)
+
     pred_fishing = df["pred_fishing"].to_numpy(copy=False)
     p_fishing = df["p_fishing"].to_numpy(copy=False)
 
@@ -485,7 +499,7 @@ def predict_and_score_testernal(model, seen):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = f"{FOLDER}/LSTM_seeded_results_full.csv"
+results_csv_path = f"{FOLDER}/LSTM_seeded_results_full_NEW.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -559,7 +573,7 @@ for seed in SEEDS:
     torch.cuda.empty_cache()
     
     # testernal 2025_1_3 test — the metric that matters
-    test_unseen = predict_and_score_testernal(model, seen=False)
+    test_unseen = predict_and_score_testernal(model, seen=False, seed=seed)
 
     print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
           f"precision {test_unseen['unseen_precision']:.3f} "
@@ -568,7 +582,7 @@ for seed in SEEDS:
           f"f1 {test_unseen['unseen_f1']:.3f} "
           f"accuracy {test_unseen['unseen_accuracy']:.3f} ")
     
-    test_seen = predict_and_score_testernal(model, seen=True)
+    test_seen = predict_and_score_testernal(model, seen=True, seed=seed)
 
     print(f"[seed {seed}] TEST on SEEN vessels in 2024 | "
           f"precision {test_seen['seen_precision']:.3f} "
@@ -610,6 +624,6 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary_full.csv")
+summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary_full_NEW.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       {FOLDER}/LSTM_seed_results_summary_full.csv")
+print(f"Summary:       {FOLDER}/LSTM_seed_results_summary_full_NEW.csv")
