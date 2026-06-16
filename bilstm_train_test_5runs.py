@@ -12,7 +12,7 @@ import gc
 import random
 
 # Load tuned parameters
-tuned_params_path = Path("tuning_FINAL/FILE_NAME.json")
+tuned_params_path = Path("tuning_FINAL/best_params_BILSTM_tune-2023-no-val-test.json")
 
 if tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -36,7 +36,7 @@ else:
     DROPOUT  = 0.326
     BATCH    = 64
     LR       = 9.27e-4
-    #exit()
+    exit()
 
 BASE = "three_months/feats_new_rule_bilstm"
 
@@ -63,11 +63,11 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1] # ADD MORE SEEDS
+SEEDS = [0, 1, 2, 3, 4] # ADD MORE SEEDS
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_FINAL/"
+FOLDER = "training_FINAL_FAST/"
 TAG = "bilstm_train_2023_val_test_2024_final"
 
 def all_mmsis_in(files):
@@ -307,6 +307,9 @@ TEST_COLUMNS = list(dict.fromkeys([
     "y_train",
     "sample_weight",
     "report",
+    "gear_report",
+    "lon",
+    "lat",
     *BASE_FEATURES,
 ]))
 
@@ -350,11 +353,12 @@ df_test = prepare_test_df(df_test)
 # TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
 random.seed(42)
 train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 4)
+print(f"Nr of train mmsis to use for seen test: ", len(train_mmsi_list))
 df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
 df_test_seen = prepare_test_df(df_test_seen)
 
 
-def predict_and_score_external(model, seen):
+def predict_and_score_external(model, seen, seed):
     if seen:
         prefix = "seen"
         df = df_test_seen
@@ -409,6 +413,13 @@ def predict_and_score_external(model, seen):
 
     pred_fishing = np.zeros(len(df), dtype=np.uint8)
     pred_fishing[predicted] = p_fishing[predicted] > 0.5
+    df["pred_fishing"] = pred_fishing
+
+    if seed==0:
+        if seen:
+            df.to_parquet(f"{FOLDER}/test_vessels_2024/BiLSTM_2024_seen_test_seed{seed}.parquet", index=False)
+        else:
+            df.to_parquet(f"{FOLDER}/test_vessels_2024/BiLSTM_2024_UNseen_test_seed{seed}.parquet", index=False)
 
     sample_weight = df["sample_weight"].to_numpy(copy=False)
     y_train = df["y_train"].to_numpy(copy=False)
@@ -481,7 +492,7 @@ def predict_and_score_external(model, seen):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = f"{FOLDER}/BiLSTM_seeded_results.csv"
+results_csv_path = f"{FOLDER}/BiLSTM_seeded_results_full.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -526,8 +537,8 @@ for seed in SEEDS:
         vl = run_epoch(model, val_loader, train=False)
         scheduler.step(vl[0])
         print(f"[seed {seed}] Ep{epoch:02d} | "
-              f"train loss {tr[0]:.4f} f1 {tr[3]:.3f} | "
-              f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f}")
+              f"train loss {tr[0]:.4f} f1 {tr[3]:.4f} | "
+              f"val loss {vl[0]:.4f} p {vl[1]:.4f} r {vl[2]:.4f} f1 {vl[3]:.4f}")
         history.append({
             "epoch": epoch,
             "train_loss": tr[0], "train_f1": tr[3],
@@ -551,23 +562,25 @@ for seed in SEEDS:
     model.load_state_dict(torch.load(model_name, map_location=device))
     
     # testernal 2025_1_3 test — the metric that matters
-    test_unseen = predict_and_score_external(model, seen=False)
+    test_unseen = predict_and_score_external(model, seen=False, seed=seed)
 
     print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
           f"precision {test_unseen['unseen_precision']:.3f} "
           f"recall {test_unseen['unseen_recall']:.3f} "
           f"specificity {test_unseen['unseen_specificity']:.3f} "
           f"f1 {test_unseen['unseen_f1']:.3f} "
-          f"accuracy {test_unseen['unseen_accuracy']:.3f} ")
+          f"accuracy {test_unseen['unseen_accuracy']:.3f} "
+          f"loss {test_unseen['unseen_loss']:.4f} ")
     
-    test_seen = predict_and_score_external(model, seen=True)
+    test_seen = predict_and_score_external(model, seen=True, seed=seed)
 
     print(f"[seed {seed}] TEST on SEEN vessels in 2024 | "
           f"precision {test_seen['seen_precision']:.3f} "
           f"recall {test_seen['seen_recall']:.3f} "
           f"specificity {test_seen['seen_specificity']:.3f} "
           f"f1 {test_seen['seen_f1']:.3f} "
-          f"accuracy {test_seen['seen_accuracy']:.3f} ")
+          f"accuracy {test_seen['seen_accuracy']:.3f} "
+          f"loss {test_seen['seen_loss']:.4f} ")
 
     row = {
         "seed": seed,
@@ -603,9 +616,9 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv(f"{FOLDER}/BiLSTM_seed_results_summary.csv")
+summary.to_csv(f"{FOLDER}/BiLSTM_seed_results_summary_full.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       {FOLDER}/BiLSTM_seed_results_summary.csv")
+print(f"Summary:       {FOLDER}/BiLSTM_seed_results_summary_full.csv")
 
 
 # IMPLEMENT
