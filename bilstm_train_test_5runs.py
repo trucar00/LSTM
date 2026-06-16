@@ -68,7 +68,7 @@ MAX_EPOCHS = 15
 PATIENCE = 3
 
 FOLDER = "training_FINAL/"
-TAG = "bilstm_train_2023_val_test_2024"
+TAG = "bilstm_train_2023_val_test_2024_final"
 
 def all_mmsis_in(files):
     s = set()
@@ -78,7 +78,7 @@ def all_mmsis_in(files):
         s.update(mmsis.unique())
     return s
 
-def get_global_val_test_mmsis(which, path="../train_val_test_mmsis.csv"):
+def get_global_val_test_mmsis(which, path="../train_val_test_mmsis_FINAL.csv"):
     split_df = pd.read_csv(path)
     split_df["mmsi"] = split_df["mmsi"].astype("int64")
     return set(split_df.loc[split_df["split"] == which, "mmsi"])
@@ -349,7 +349,7 @@ df_test = prepare_test_df(df_test)
 
 # TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
 random.seed(42)
-train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 2)
+train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 4)
 df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
 df_test_seen = prepare_test_df(df_test_seen)
 

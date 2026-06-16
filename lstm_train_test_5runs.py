@@ -66,7 +66,7 @@ SEEDS = [0, 1, 2, 3, 4]
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_FINAL"
+FOLDER = "training_FINAL_FAST"
 TAG = "lstm_train_2023_val_test_2024"
 
 def all_mmsis_in(files):
@@ -359,7 +359,8 @@ df_test = prepare_test_df(df_test)
 
 # TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
 random.seed(42)
-train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 2)
+train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 4) # 25% of train mmsis used as seen
+print(f"Nr of train mmsis to use for seen test: ", len(train_mmsi_list))
 df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
 df_test_seen = prepare_test_df(df_test_seen)
 
@@ -367,13 +368,14 @@ df_test_seen = prepare_test_df(df_test_seen)
 INFER_BATCH = 128   # how many "ending-at-t" windows to forward in one pass
 
 def predict_and_score_testernal(model, seen, seed):
-
     if seen:
         df = df_test_seen
         prefix = "seen"
     else:
         df = df_test
         prefix = "unseen"
+
+    print("Predicting for ", prefix, " vessels.")
 
     df["p_fishing"] = np.nan
 
@@ -420,9 +422,9 @@ def predict_and_score_testernal(model, seen, seed):
 
     if seed==0:
         if seen:
-            df.to_parquet(f"{FOLDER}/test_vessels_2024/2024_seen_test_seed{seed}.parquet", index=False)
+            df.to_parquet(f"{FOLDER}/test_vessels_2024/LSTM_2024_seen_test_seed{seed}.parquet", index=False)
         else:
-            df.to_parquet(f"{FOLDER}/test_vessels_2024/2024_UNseen_test_seed{seed}.parquet", index=False)
+            df.to_parquet(f"{FOLDER}/test_vessels_2024/LSTM_2024_UNseen_test_seed{seed}.parquet", index=False)
 
     pred_fishing = df["pred_fishing"].to_numpy(copy=False)
     p_fishing = df["p_fishing"].to_numpy(copy=False)
@@ -544,8 +546,8 @@ for seed in SEEDS:
         vl = run_epoch(model, val_loader, train=False)
         scheduler.step(vl[0])
         print(f"[seed {seed}] Ep{epoch:02d} | "
-              f"train loss {tr[0]:.4f} f1 {tr[3]:.3f} | "
-              f"val loss {vl[0]:.4f} p {vl[1]:.3f} r {vl[2]:.3f} f1 {vl[3]:.3f}")
+              f"train loss {tr[0]:.4f} f1 {tr[3]:.4f} | "
+              f"val loss {vl[0]:.4f} p {vl[1]:.4f} r {vl[2]:.4f} f1 {vl[3]:.4f}")
         history.append({
             "epoch": epoch,
             "train_loss": tr[0], "train_f1": tr[3],
@@ -572,24 +574,27 @@ for seed in SEEDS:
     gc.collect()
     torch.cuda.empty_cache()
     
-    # testernal 2025_1_3 test — the metric that matters
+    # Test on unseen future vessels in 2024
     test_unseen = predict_and_score_testernal(model, seen=False, seed=seed)
 
     print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
-          f"precision {test_unseen['unseen_precision']:.3f} "
-          f"recall {test_unseen['unseen_recall']:.3f} "
-          f"specificity {test_unseen['unseen_specificity']:.3f} "
-          f"f1 {test_unseen['unseen_f1']:.3f} "
-          f"accuracy {test_unseen['unseen_accuracy']:.3f} ")
+          f"precision {test_unseen['unseen_precision']:.4f} "
+          f"recall {test_unseen['unseen_recall']:.4f} "
+          f"specificity {test_unseen['unseen_specificity']:.4f} "
+          f"f1 {test_unseen['unseen_f1']:.4f} "
+          f"accuracy {test_unseen['unseen_accuracy']:.4f} "
+          f"loss {test_unseen['unseen_loss']:.4f} ")
     
+    # Test on seen (Norwegian fishing fleet) in 2024
     test_seen = predict_and_score_testernal(model, seen=True, seed=seed)
 
     print(f"[seed {seed}] TEST on SEEN vessels in 2024 | "
-          f"precision {test_seen['seen_precision']:.3f} "
-          f"recall {test_seen['seen_recall']:.3f} "
-          f"specificity {test_seen['seen_specificity']:.3f} "
-          f"f1 {test_seen['seen_f1']:.3f} "
-          f"accuracy {test_seen['seen_accuracy']:.3f} ")
+          f"precision {test_seen['seen_precision']:.4f} "
+          f"recall {test_seen['seen_recall']:.4f} "
+          f"specificity {test_seen['seen_specificity']:.4f} "
+          f"f1 {test_seen['seen_f1']:.4f} "
+          f"accuracy {test_seen['seen_accuracy']:.4f} "
+          f"loss {test_seen['seen_loss']:.4f} ")
 
     row = {
         "seed": seed,
