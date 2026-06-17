@@ -52,49 +52,16 @@ TRAIN_FILES = [
     f"{BASE}/2024_10_12_feats.parquet",   # Q4 2024
 ]
 
-# VALIDATION and TEST on 2024. We have MMSIS for validation and MMSIS for testing
-VAL_TEST_FILES = [
-    f"{BASE}/2024_1_3_feats.parquet",     # Q1 2024
-    f"{BASE}/2024_4_6_feats.parquet",     # Q2 2024
-    f"{BASE}/2024_7_9_feats.parquet",     # Q3 2024
-    f"{BASE}/2024_10_12_feats.parquet",   # Q4 2024
-]
-
 BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
 SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4] 
-MAX_EPOCHS = 15
-PATIENCE = 3
+EPOCHS = 10
 
-FOLDER = "training_FINAL_FAST"
-TAG = "lstm_train_2023_val_test_2024"
-
-def all_mmsis_in(files):
-    s = set()
-    for f in files:
-        mmsis = pd.read_parquet(f, columns=["mmsi"])["mmsi"]
-        mmsis = pd.to_numeric(mmsis, errors="coerce").dropna().astype("int64")
-        s.update(mmsis.unique())
-    return s
-
-def get_global_val_test_mmsis(which, path="../train_val_test_mmsis_FINAL.csv"):
-    split_df = pd.read_csv(path)
-    split_df["mmsi"] = split_df["mmsi"].astype("int64")
-    mmsis = set(split_df.loc[split_df["split"] == which,"mmsi"])
-    return mmsis
- 
-# All vessels in each quarter (no MMSI split -- the split is by TIME).
-val_mmsis = get_global_val_test_mmsis(which="validation")
-test_mmsis = get_global_val_test_mmsis(which="test")
-all_mmsis_in_train = all_mmsis_in(TRAIN_FILES)
-train_mmsis = all_mmsis_in_train - val_mmsis - test_mmsis
-assert train_mmsis.isdisjoint(val_mmsis), "Train/val MMSIs overlap!"
-assert train_mmsis.isdisjoint(test_mmsis), "Train/test MMSIs overlap!"
-print(f"Train (all 2023) vessels: {len(train_mmsis)} | Val (2024) vessels: {len(val_mmsis)} | Test (2024) vessels: {len(test_mmsis)}")
+FOLDER = "training_FULL_MODEL"
+TAG = "lstm_train_2023_and_2024"
 
 # ------------------------------------------------------------------
 # Normalization stats -- fit on TRAIN (2023) only
@@ -114,7 +81,6 @@ else:
         df = pd.read_parquet(f, columns=needed_cols)
         print("mmsis in training param df before: ", df["mmsi"].nunique())
         df["mmsi"] = df["mmsi"].astype("int64")
-        df = df[df["mmsi"].isin(train_mmsis)]
         print("mmsis in training param df after: ", df["mmsi"].nunique())
         df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
         month = df["date_time_utc"].dt.month
@@ -175,7 +141,7 @@ class AISWindowDataset(IterableDataset):
                 "y_train", "sample_weight"] + BASE_FEATURES
         for f in files:
             df = pd.read_parquet(f, columns=cols)
-            df = df[df["mmsi"].isin(self.mmsi_set)].copy()
+            #df = df[df["mmsi"].isin(self.mmsi_set)].copy()
             if len(df) == 0:
                 continue
             df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
@@ -220,17 +186,13 @@ class FishingLSTM(nn.Module):
 # Loaders + device + class imbalance (all fixed across seeds)
 # ============================================================
 
-train_ds = AISWindowDataset(TRAIN_FILES, train_mmsis, FEATURES, mu, sigma,
+train_ds = AISWindowDataset(TRAIN_FILES, None, FEATURES, mu, sigma,
                             shuffle_files=True, stride=STRIDE, window=WINDOW)
-val_ds   = AISWindowDataset(VAL_TEST_FILES, val_mmsis, FEATURES, mu, sigma,
-                            stride=STRIDE, window=WINDOW)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH, shuffle=False,
                           num_workers=0,
                           pin_memory=torch.cuda.is_available(),
                           drop_last=True)
-val_loader  = DataLoader(val_ds,  batch_size=BATCH, shuffle=False,
-                         num_workers=0, pin_memory=False)
 
 
 if torch.cuda.is_available():
@@ -245,7 +207,6 @@ pos = 0
 cols_w = ["mmsi", "sample_weight", "y_train"]
 for f in TRAIN_FILES:
     df_tmp = pd.read_parquet(f, columns=cols_w)
-    df_tmp = df_tmp[df_tmp["mmsi"].isin(train_mmsis)]
     df_tmp = df_tmp[df_tmp["sample_weight"] == 1]
     neg += (df_tmp["y_train"] == 0).sum()
     pos += (df_tmp["y_train"] == 1).sum()
@@ -263,9 +224,9 @@ def masked_loss(logits, y, mask):
     return (per * m).sum() / m.sum().clamp_min(1.0)
 
 # ============================================================
-# Epoch runner — takes model + optional optimizer
+# Epoch runner
 # ============================================================
-
+ 
 def run_epoch(model, loader, optimizer=None, train=False):
     model.train() if train else model.eval()
     tot_loss, tot_n = 0.0, 0
@@ -302,337 +263,59 @@ def run_epoch(model, loader, optimizer=None, train=False):
     acc  = (tp + tn) / max(tp + fp + fn + tn, 1)
     return avg, prec, rec, f1, acc
 
-
-# ============================================================
-# Pre-normalize the 2025 testernal test file ONCE
-# (mu/sigma are seed-independent, so this is safe)
-# ============================================================
-
-print(f"Preparing seen and unseen test set from: {VAL_TEST_FILES}")
-
-TEST_COLUMNS = list(dict.fromkeys([
-    "mmsi",
-    "trajectory_id",
-    "date_time_utc",
-    "y_train",
-    "sample_weight",
-    "report",
-    "gear_report",
-    "lon",
-    "lat",
-    *BASE_FEATURES,
-]))
-
-# TEST ON FUTURE UNSEEN VESSELS
-
-def get_test_df(files, mmsi_list):
-    dfs = []
-
-    for f in files:
-        df_part = pd.read_parquet(
-            f,
-            engine="pyarrow",
-            columns=TEST_COLUMNS,
-            filters=[("mmsi", "in", mmsi_list)],
-        )
-        dfs.append(df_part)
-
-    df = pd.concat(dfs, ignore_index=True, copy=False)
-
-    del dfs, df_part
+seed = 42
+print(f"\n========== TRAINING FULL MODEL (seed {seed}) ==========")
+torch.manual_seed(seed)
+np.random.seed(seed)
+random.seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+ 
+model = FishingLSTM(
+    n_features=len(FEATURES),
+    hidden=HIDDEN, n_layers=N_LAYERS,
+    dropout=DROPOUT, dense=DENSE,
+).to(device)
+optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
+# No validation set, so step the scheduler on the (training) loss.
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, mode="min", factor=0.5, patience=2)
+ 
+model_name = f"{FOLDER}/model_{TAG}_seed{seed}.pt"
+history = []
+ 
+for epoch in range(1, EPOCHS + 1):
+    tr_loss, tr_prec, tr_rec, tr_f1, tr_acc = run_epoch(
+        model, train_loader, optimizer=optimizer, train=True)
+ 
+    scheduler.step(tr_loss)
+    lr_now = optimizer.param_groups[0]["lr"]
+ 
+    print(f"[epoch {epoch:02d}/{EPOCHS}] "
+          f"loss={tr_loss:.4f} prec={tr_prec:.3f} rec={tr_rec:.3f} "
+          f"f1={tr_f1:.3f} acc={tr_acc:.3f} lr={lr_now:.2e}")
+ 
+    history.append({
+        "epoch": epoch, "train_loss": tr_loss,
+        "train_prec": tr_prec, "train_rec": tr_rec,
+        "train_f1": tr_f1, "train_acc": tr_acc, "lr": lr_now,
+    })
+ 
+    # Save the latest checkpoint every epoch (crash-safe; final epoch = final model).
+    torch.save(model.state_dict(), model_name)
+ 
     gc.collect()
-    return df
-
-def prepare_test_df(df):
-    df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
-    _month = df["date_time_utc"].dt.month
-    df["month_sin"] = np.sin(2 * np.pi * _month / 12)
-    df["month_cos"] = np.cos(2 * np.pi * _month / 12)
-    for col in FEATURES:
-        df[col] = (df[col] - mu[col]) / sigma[col]
-    df["ra_accel"] = df["ra_accel"].clip(-5, 5)
-    df["ra_jerk"]  = df["ra_jerk"].clip(-5, 5)
-    df["ra_dcog"]  = df["ra_dcog"].clip(-5, 5)
-
-    return df.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
-
-# TEST on future UNSEEN vessels -> foreign vessels (russian fex)
-test_mmsi_list = list(test_mmsis)
-df_test = get_test_df(VAL_TEST_FILES, test_mmsi_list)
-df_test = prepare_test_df(df_test)
-
-# TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
-random.seed(42)
-train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 4) # 25% of train mmsis used as seen
-print(f"Nr of train mmsis to use for seen test: ", len(train_mmsi_list))
-df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
-df_test_seen = prepare_test_df(df_test_seen)
-
-
-INFER_BATCH = 128   # how many "ending-at-t" windows to forward in one pass
-
-def predict_and_score_testernal(model, seen, seed):
-    if seen:
-        df = df_test_seen
-        prefix = "seen"
-    else:
-        df = df_test
-        prefix = "unseen"
-
-    print("Predicting for ", prefix, " vessels.")
-
-    df["p_fishing"] = np.nan
-
-    model.eval()
-    with torch.inference_mode():
-        for traj_id, traj in df.groupby("trajectory_id", sort=False):
-            idx = traj.index.to_numpy()
-            X_all = traj[FEATURES].to_numpy(dtype=np.float32)
-            n, F = X_all.shape
-            if n < 1:
-                continue
-
-            # --- Cold-start phase: positions t = 0 .. min(WINDOW, n) - 1 ---
-            # One forward pass on X_all[:WINDOW] gives causal predictions at
-            # every one of those positions because the LSTM is unidirectional.
-            head_len = min(WINDOW, n)
-            x_head = torch.from_numpy(X_all[:head_len][None, :, :]).to(device)
-            probs_head = torch.sigmoid(model(x_head))[0].cpu().numpy()  # (head_len,)
-
-            traj_probs = np.empty(n, dtype=np.float32)
-            traj_probs[:head_len] = probs_head
-
-            # --- Steady-state phase: positions t = WINDOW .. n-1 ---
-            # For each such t, window is X_all[t-WINDOW+1 : t+1]; keep last pred.
-            if n > WINDOW:
-                sw = np.lib.stride_tricks.sliding_window_view(
-                    X_all, window_shape=WINDOW, axis=0
-                )                                  # (n - WINDOW + 1, F, WINDOW)
-                sw = sw.transpose(0, 2, 1)         # -> (n - WINDOW + 1, WINDOW, F)
-                sw = sw[1:]                        # drop window ending at WINDOW-1
-                                                   # (already covered by head)
-
-                for i in range(0, len(sw), INFER_BATCH):
-                    batch_np = np.ascontiguousarray(sw[i:i + INFER_BATCH])
-                    batch = torch.from_numpy(batch_np).to(device)
-                    logits = model(batch)                                  # (B, WINDOW)
-                    last_probs = torch.sigmoid(logits[:, -1]).cpu().numpy()
-                    t_start = WINDOW + i
-                    traj_probs[t_start : t_start + len(last_probs)] = last_probs
-
-            df.loc[idx, "p_fishing"] = traj_probs
-
-    df["pred_fishing"] = (df["p_fishing"] > 0.5).astype(int)
-
-    if seed==0:
-        if seen:
-            df.to_parquet(f"{FOLDER}/test_vessels_2024/LSTM_2024_seen_test_seed{seed}.parquet", index=False)
-        else:
-            df.to_parquet(f"{FOLDER}/test_vessels_2024/LSTM_2024_UNseen_test_seed{seed}.parquet", index=False)
-
-    pred_fishing = df["pred_fishing"].to_numpy(copy=False)
-    p_fishing = df["p_fishing"].to_numpy(copy=False)
-
-    sample_weight = df["sample_weight"].to_numpy(copy=False)
-    y_train = df["y_train"].to_numpy(copy=False)
-    report = df["report"].to_numpy(copy=False)
-
-    eval_mask = (sample_weight == 1)
-
-    y_true = y_train[eval_mask].astype(np.uint8, copy=False)
-    y_prob = p_fishing[eval_mask]
-
-    test_logloss = log_loss(y_true, y_prob, labels=[0, 1])
-
-    pred_pos = pred_fishing == 1
-    pred_neg = ~pred_pos
-
-    fishing = report == "fishing"
-    no_fishing = report == "conf_no_fishing"
-    unknown = report == "unknown"
-
-    tp = int(np.sum(pred_pos & fishing))
-    fp = int(np.sum(pred_pos & no_fishing))
-    tn = int(np.sum(pred_neg & no_fishing))
-    fn = int(np.sum(pred_neg & fishing))
-
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    specificity = tn / (tn + fp) if tn + fp else 0.0
-    accuracy = (
-        (tp + tn) / (tp + tn + fp + fn)
-        if tp + tn + fp + fn
-        else 0.0
-    )
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
-
-
-    del df
-    gc.collect()
-
-    result = {
-        f"{prefix}_tp": tp,
-        f"{prefix}_fp": fp,
-        f"{prefix}_tn": tn,
-        f"{prefix}_fn": fn,
-        f"{prefix}_accuracy": accuracy,
-        f"{prefix}_recall": recall,
-        f"{prefix}_specificity": specificity,
-        f"{prefix}_precision": precision,
-        f"{prefix}_f1": f1,
-        f"{prefix}_loss": test_logloss,
-        f"{prefix}_n_pred_fish": int(pred_pos.sum()),
-        f"{prefix}_n_pred_no_fish": int(pred_neg.sum()),
-        f"{prefix}_n_reported_fish": int(fishing.sum()),
-        f"{prefix}_n_reported_no_fish": int(no_fishing.sum()),
-        f"{prefix}_n_unknowns": int(unknown.sum()),
-        f"{prefix}_n_pred_fish_of_unknown": int(
-            np.sum(pred_pos & unknown)
-        ),
-        f"{prefix}_n_pred_no_fish_of_unknown": int(
-            np.sum(pred_neg & unknown)
-        ),
-    }
-
-    return result
-
-
-# ============================================================
-# Multi-seed loop
-# ============================================================
-
-results_csv_path = f"{FOLDER}/LSTM_seeded_results_full_NEW.csv"
-
-# Resume support: skip seeds already in the CSV
-done_seeds = set()
-all_results = []
-if os.path.exists(results_csv_path):
-    try:
-        existing = pd.read_csv(results_csv_path)
-        done_seeds = set(existing["seed"].tolist())
-        all_results = existing.to_dict("records")
-        print(f"Resuming. Already-completed seeds: {sorted(done_seeds)}")
-    except Exception as e:
-        print(f"Could not read existing results ({e}); starting fresh.")
-
-for seed in SEEDS:
-    if seed in done_seeds:
-        print(f"\n[seed {seed}] Already done. Skipping.")
-        continue
-
-    print(f"\n========== SEED {seed} ==========")
-    torch.manual_seed(seed)
-    np.random.seed(seed)
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-    # Fresh model / optimizer / scheduler per seed
-    model = FishingLSTM(
-        n_features=len(FEATURES),
-        hidden=HIDDEN, n_layers=N_LAYERS,
-        dropout=DROPOUT, dense=DENSE,
-    ).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=2)
-
-    model_name = f"models/seed/model_lstm_seed{seed}_test_final.pt"
-    best_val = float("inf")
-    bad = 0
-    history = []
-
-    for epoch in range(1, MAX_EPOCHS + 1):
-        tr = run_epoch(model, train_loader, optimizer=optimizer, train=True)
-        vl = run_epoch(model, val_loader, train=False)
-        scheduler.step(vl[0])
-        print(f"[seed {seed}] Ep{epoch:02d} | "
-              f"train loss {tr[0]:.4f} f1 {tr[3]:.4f} | "
-              f"val loss {vl[0]:.4f} p {vl[1]:.4f} r {vl[2]:.4f} f1 {vl[3]:.4f}")
-        history.append({
-            "epoch": epoch,
-            "train_loss": tr[0], "train_f1": tr[3],
-            "val_loss":   vl[0], "val_p":    vl[1],
-            "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
-        })
-        pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_LSTM_seed{seed}_test_final.csv", index=False
-        )
-        if vl[0] < best_val:
-            best_val = vl[0]
-            torch.save(model.state_dict(), model_name)
-            bad = 0
-        else:
-            bad += 1
-            if bad >= PATIENCE:
-                print(f"[seed {seed}] Early stopping at epoch {epoch}")
-                break
-
-    # Reload best checkpoint for evaluation
-    model.load_state_dict(torch.load(model_name, map_location=device))
-    
-    optimizer.zero_grad(set_to_none=True)
-    gc.collect()
-    torch.cuda.empty_cache()
-    
-    # Test on unseen future vessels in 2024
-    test_unseen = predict_and_score_testernal(model, seen=False, seed=seed)
-
-    print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
-          f"precision {test_unseen['unseen_precision']:.4f} "
-          f"recall {test_unseen['unseen_recall']:.4f} "
-          f"specificity {test_unseen['unseen_specificity']:.4f} "
-          f"f1 {test_unseen['unseen_f1']:.4f} "
-          f"accuracy {test_unseen['unseen_accuracy']:.4f} "
-          f"loss {test_unseen['unseen_loss']:.4f} ")
-    
-    # Test on seen (Norwegian fishing fleet) in 2024
-    test_seen = predict_and_score_testernal(model, seen=True, seed=seed)
-
-    print(f"[seed {seed}] TEST on SEEN vessels in 2024 | "
-          f"precision {test_seen['seen_precision']:.4f} "
-          f"recall {test_seen['seen_recall']:.4f} "
-          f"specificity {test_seen['seen_specificity']:.4f} "
-          f"f1 {test_seen['seen_f1']:.4f} "
-          f"accuracy {test_seen['seen_accuracy']:.4f} "
-          f"loss {test_seen['seen_loss']:.4f} ")
-
-    row = {
-        "seed": seed,
-        "best_val_loss": best_val,
-        "epochs_trained": len(history),
-        **test_unseen,
-        **test_seen,
-    }
-    all_results.append(row)
-
-    # Save incrementally so a crash doesn't lose everything
-    pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
-    torch.cuda.synchronize()
-    del model, optimizer, scheduler
-    gc.collect()
-    torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
+ 
+# Save a clearly-named final copy + the training history
+final_name = f"{FOLDER}/model_{TAG}_FULL_FINAL.pt"
+torch.save(model.state_dict(), final_name)
+pd.DataFrame(history).to_csv(f"{FOLDER}/history_{TAG}.csv", index=False)
+ 
+print(f"\nDone. Final model: {final_name}")
+print(f"Normalization stats: {mu_sigma_path}")
+print(f"History: {FOLDER}/history_{TAG}.csv")
 
 
-# ============================================================
-# Summary across seeds
-# ============================================================
-
-df_res = pd.DataFrame(all_results)
-print("\n========== SUMMARY ==========")
-print(df_res.to_string(index=False))
-
-metric_cols = [
-    "seen_loss", "seen_f1", "seen_precision", "seen_recall", "seen_specificity", "seen_accuracy",
-    "unseen_loss", "unseen_f1", "unseen_precision", "unseen_recall", "unseen_specificity", "unseen_accuracy",
-]
-summary = df_res[metric_cols].agg(["mean", "std"]).T
-summary.columns = ["mean", "std"]
-print("\nMean / Std across seeds:")
-print(summary)
-summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary_full_NEW.csv")
-print(f"\nPer-seed rows: {results_csv_path}")
-print(f"Summary:       {FOLDER}/LSTM_seed_results_summary_full_NEW.csv")
+######################

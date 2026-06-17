@@ -2,12 +2,12 @@
 #SBATCH --account=share-ie-itk
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=6:00:00
+#SBATCH --time=12:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=64G             # GB memory
-#SBATCH --output=training_FINAL_FAST/output_LSTM_%j.txt    # Log file
-#SBATCH --job-name=LSTM_train
+#SBATCH --mem=128G             # GB memory
+#SBATCH --output=training_FULL_MODEL/output_LSTM_%j.txt    # Log file
+#SBATCH --job-name=LSTM_train_FULL_MODEL
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -37,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u lstm_train_test_5runs.py
+python -u LSTM_train_full.py
