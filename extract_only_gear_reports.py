@@ -1,6 +1,7 @@
 import pandas as pd
 import pyarrow.parquet as pq
 import numpy as np
+import gc
 
 GEARS = ["Trål", "Krokredskap", "Bur og ruser", "Not", "Snurrevad", "Garn"]
 BASE = "three_months/feats_new_rule_online"
@@ -160,6 +161,8 @@ def resample_all_files():
         print("Downsampling ", save_file)
         df = downsample(df, step="30s")
         df.to_parquet(f"three_months/resampled/{save_file}", engine="pyarrow")
+        del df
+        gc.collect()
         print("Saved downsampled!")
 
 resample_all_files()
