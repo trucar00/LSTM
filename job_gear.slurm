@@ -5,7 +5,7 @@
 #SBATCH --time=4:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=64G             # GB memory
+#SBATCH --mem=32G             # GB memory
 #SBATCH --output=output_LSTM_%j.txt    # Log file
 #SBATCH --job-name=LSTM_gear_test
 #SBATCH --mail-user=trulsc00@gmail.com
