@@ -6,8 +6,8 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=tuning_FINAL/output_optuna_BiLSTM_2023_%j.txt    # Log file
-#SBATCH --job-name=optuna_BILSTM_2023_excluded_val_test_vessels
+#SBATCH --output=training_FINAL/output_BILSTM_%j.txt    # Log file
+#SBATCH --job-name=BILSTM_train_2023_full_final_all_train_for_test
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -37,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u bilstm_optuna_q1_q1.py
+python -u bilstm_train_test_5runs.py

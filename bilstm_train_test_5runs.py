@@ -63,11 +63,11 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4] # ADD MORE SEEDS
+SEEDS = [0] # ADD MORE SEEDS
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_FINAL_FAST/"
+FOLDER = "training_FINAL/"
 TAG = "bilstm_train_2023_val_test_2024_final"
 
 def all_mmsis_in(files):
@@ -527,7 +527,7 @@ for seed in SEEDS:
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2)
 
-    model_name = f"models/seed/model_bilstm_seed{seed}_final.pt"
+    model_name = f"models/seed/model_bilstm_seed{seed}_final_FULL.pt"
     best_val = float("inf")
     bad = 0
     history = []
@@ -546,7 +546,7 @@ for seed in SEEDS:
             "val_r":      vl[2], "val_f1":   vl[3], "val_acc": vl[4],
         })
         pd.DataFrame(history).to_csv(
-            f"training_stats/training_history_BiLSTM_seed{seed}_final.csv", index=False
+            f"training_stats/training_history_BiLSTM_seed{seed}_final_FULL.csv", index=False
         )
         if vl[0] < best_val:
             best_val = vl[0]
