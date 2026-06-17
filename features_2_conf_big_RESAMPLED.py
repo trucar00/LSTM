@@ -140,7 +140,7 @@ def get_fishing_segments(df, seg_id_end):
     return df[df["report"].isin(GEAR)].copy()
 
 def main(online):
-    for year in range(2024, 2024+1):
+    for year in range(2023, 2023+1):
         for i in range(1, 12+1, 3):
             df = pd.read_parquet(f"three_months/resampled/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
