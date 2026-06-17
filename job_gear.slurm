@@ -37,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u extract_only_gear_reports.py
+python -u features_2_conf_big_RESAMPLED.py
