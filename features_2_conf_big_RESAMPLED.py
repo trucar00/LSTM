@@ -70,10 +70,6 @@ def add_features(df, online=False):
     df["cog_interp_sin"] = np.sin(np.radians(df["cog_interp"]))
     df["cog_interp_cos"] = np.cos(np.radians(df["cog_interp"]))
 
-    
-    # Sample weight, unknown = 0
-    df["sample_weight"] = df["y"].notna().astype(np.float32)
-
     # Calculated speed in m/s
     df["speed_calc_ms"] = df["dist_to_prev"] / df["dt"]
 
@@ -149,6 +145,7 @@ def main(online):
             df = pd.read_parquet(f"three_months/resampled/{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
             df = add_features(df, online=online)
+            print(df.head())
             check_feats(df)
             seg_id_end = str(year) + "-" + str(i) + "-" + str(i+2)
             df = get_fishing_segments(df, seg_id_end=seg_id_end)
