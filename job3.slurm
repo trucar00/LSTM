@@ -2,12 +2,12 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=12:00:00
+#SBATCH --time=1:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=128G             # GB memory
-#SBATCH --output=tuning/output_optuna_LSTM_2023_%j.txt    # Log file
-#SBATCH --job-name=optuna_LSTM_2023_excluded_val_test_vessels
+#SBATCH --mem=64G             # GB memory
+#SBATCH --output=three_months/only_gear_reports/output_%j.txt    # Log file
+#SBATCH --job-name=only_gear_feats
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -37,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u lstm_optuna_q1_q1.py
+python -u extract_only_gear_reports.py
