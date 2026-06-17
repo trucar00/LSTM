@@ -136,8 +136,8 @@ def get_fishing_segments(df, seg_id_end):
     new_traj  = df["trajectory_id"].ne(df["trajectory_id"].shift())
     gear_flip = df["report"].ne(df["report"].shift())
 
-    df["segment_id"] = ((new_traj | gear_flip ).cumsum()).astype(str) + seg_id_end
-    return df[df["gear_report"].isin(GEAR)].copy()
+    df["segment_id"] = ((new_traj | gear_flip ).astype("int64").cumsum()).astype(str) + "-" + seg_id_end
+    return df[df["report"].isin(GEAR)].copy()
 
 def main(online):
     for year in range(2024, 2024+1):
