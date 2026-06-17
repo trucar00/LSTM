@@ -20,22 +20,34 @@ FILES = [
 ]
 
 
-def get_time_name(filepath):
+def get_fishing_segments(df, seg_id_end):
+    df = df.sort_values(["trajectory_id", "date_time_utc"]).reset_index(drop=True)
+    df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
+
+    new_traj  = df["trajectory_id"].ne(df["trajectory_id"].shift())
+    gear_flip = df["gear_report"].ne(df["gear_report"].shift())
+
+    df["segment_id"] = ((new_traj | gear_flip ).cumsum()).astype(str) + seg_id_end
+    return df[df["gear_report"].isin(GEARS)].copy()
+
+def get_file_name(filepath):
     split_str = filepath.split("/")
     return "onl_" + split_str[2]
+
+def seg_id_ending(filepath):
+    split_str = filepath.split("/")
+    date = split_str[2].split("_")[0:3]
+    date_str = "-" + date[0] + "-" + date[1] + "-" + date[2]
+    return date_str
 
 
 def get_msgs_reported_fishing(files):
     for f in files:
-        table = pq.read_table(
-            f,
-            filters=[("gear_report", "in", GEARS)]
-        )
-        file_name = get_time_name(f)
+        df = pd.read_parquet(f, engine="pyarrow")
+        seg_id_end = seg_id_ending(f)
+        df = get_fishing_segments(df, seg_id_end)
+        file_name = get_file_name(f)
         save_path = f"{SAVE}/{file_name}"
-
-        df = table.to_pandas()
-        
         df.to_parquet(save_path, index=False)
 
     return "DONE!"
