@@ -91,7 +91,7 @@ def add_features(df, online=False):
 
     # Optional cleanup of helper columns
     df = df.drop(columns=[
-        "prev_time", "prev_lat", "prev_lon", "prev_cog",
+        "prev_time", "prev_lat", "prev_lon", "prev_cog_interp",
         "prev_speed_calc_ms", "prev_accel"
     ])
 
