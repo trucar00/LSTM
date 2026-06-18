@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from tqdm import tqdm
 import pickle
 from pathlib import Path
 import json
@@ -146,7 +145,7 @@ df_predict = df_predict.sort_values(["trajectory_id", "date_time_utc"]).copy()
 df_predict["p_fishing"] = np.nan
 
 with torch.no_grad():
-    for traj_id, traj in tqdm(df_predict.groupby("trajectory_id", sort=False)):
+    for traj_id, traj in df_predict.groupby("trajectory_id", sort=False):
         idx = traj.index.to_numpy()
         X_all = traj[FEATURES].to_numpy(dtype=np.float32)
         n, F = X_all.shape
