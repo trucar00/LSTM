@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path(f"tuning/best_params_online.json")
+tuned_params_path = Path(f"tuning_FINAL/best_params_LSTM_tune-2023-no-val-test.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     
