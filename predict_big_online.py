@@ -35,14 +35,15 @@ else:
     DENSE = 64
     BATCH = 128
     LR = 1e-4
+    exit()
 
-BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt", "dist_to_shore_km"]
+BASE_FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "ra_accel", "ra_jerk", "log_dist", "ra_dcog", "log_dt"]
 
 SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-MODEL_PATH = "models/model_online_tuned_2024_1_3_4_6.pt"
+MODEL_PATH = "training_FULL_MODEL/model_lstm_train_2023_and_2024_FULL_FINAL.pt"
 
 # --------------------------------------------------
 # Same model class as training
@@ -56,11 +57,11 @@ class FishingLSTM(nn.Module):
             hidden_size=hidden,
             num_layers=n_layers,
             batch_first=True,
-            bidirectional=False,                              # <-- unidirectional
+            bidirectional=False,
             dropout=dropout if n_layers > 1 else 0.0,
         )
         self.head = nn.Sequential(
-            nn.Linear(hidden, dense),                         # <-- hidden, not 2*hidden
+            nn.Linear(hidden, dense),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(dense, 1),
@@ -68,15 +69,16 @@ class FishingLSTM(nn.Module):
 
     def forward(self, x):
         h, _ = self.lstm(x)
-        return self.head(h).squeeze(-1)
+        logits = self.head(h).squeeze(-1)
+        return logits
 
 
 # --------------------------------------------------
-# Recompute the same normalization stats from Jan-Apr
+# Recompute the same normalization stats from 2023 and 2024
 # Better: save mu/sigma during training and load them.
 # --------------------------------------------------
 
-mu_sigma_path = Path(f"parameters_2024_1_3_4_6.pkl")
+mu_sigma_path = Path(f"training_FULL_MODEL/parameters_lstm_train_2023_and_2024.pkl")
 with open(mu_sigma_path, "rb") as f:
     params = pickle.load(f)
 
@@ -89,7 +91,7 @@ print("Read mu and sigma from file")
 # If not built yet: run df_predict = add_features(raw_may_df)
 # --------------------------------------------------
 
-df_predict = pd.read_parquet("three_months/feats_all_gear2/2025_1_3_feats.parquet")
+df_predict = pd.read_parquet("three_months/feats_new_rule_online/2025_1_3_feats.parquet")
 #df_predict = pd.read_parquet("other_preds/russian_svalbard_trawler_feats.parquet")
 df_predict["date_time_utc"] = pd.to_datetime(df_predict["date_time_utc"])
 month = df_predict["date_time_utc"].dt.month
@@ -138,7 +140,7 @@ df_predict = df_predict.sort_values(["trajectory_id", "date_time_utc"]).copy()
 # This means every message gets exactly ONE prediction, using only past info.
 # No averaging over overlapping windows.
 
-INFER_BATCH = 256   # how many "ending-at-t" windows to forward in one pass
+INFER_BATCH = 128   # how many "ending-at-t" windows to forward in one pass
 
 df_predict = df_predict.sort_values(["trajectory_id", "date_time_utc"]).copy()
 df_predict["p_fishing"] = np.nan
@@ -186,8 +188,7 @@ with torch.no_grad():
         df_predict.loc[idx, "p_fishing"] = traj_probs
 
 df_predict["pred_fishing"] = (df_predict["p_fishing"] > 0.5).astype(int)
-df_predict.to_parquet("predictions/2025_1_3_w_2024_1_3_4_6_online_model_tuned.parquet",
-                      index=False)
+df_predict.to_parquet("predictions_seen/2025_1_3_w_lstm_full_model.parquet", index=False)
 
 print(df_predict[["trajectory_id", "date_time_utc", "mmsi",
                   "p_fishing", "pred_fishing"]].head())
