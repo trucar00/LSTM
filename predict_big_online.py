@@ -90,7 +90,7 @@ print("Read mu and sigma from file")
 # If not built yet: run df_predict = add_features(raw_may_df)
 # --------------------------------------------------
 
-df_predict = pd.read_parquet("three_months/feats_new_rule_online/2025_1_3_feats.parquet")
+df_predict = pd.read_parquet("three_months/feats_new_rule_online/2025_4_6_feats.parquet")
 #df_predict = pd.read_parquet("other_preds/russian_svalbard_trawler_feats.parquet")
 df_predict["date_time_utc"] = pd.to_datetime(df_predict["date_time_utc"])
 month = df_predict["date_time_utc"].dt.month
@@ -139,7 +139,7 @@ df_predict = df_predict.sort_values(["trajectory_id", "date_time_utc"]).copy()
 # This means every message gets exactly ONE prediction, using only past info.
 # No averaging over overlapping windows.
 
-INFER_BATCH = 128   # how many "ending-at-t" windows to forward in one pass
+INFER_BATCH = 256   # how many "ending-at-t" windows to forward in one pass
 
 df_predict = df_predict.sort_values(["trajectory_id", "date_time_utc"]).copy()
 df_predict["p_fishing"] = np.nan
@@ -187,7 +187,7 @@ with torch.no_grad():
         df_predict.loc[idx, "p_fishing"] = traj_probs
 
 df_predict["pred_fishing"] = (df_predict["p_fishing"] > 0.5).astype(int)
-df_predict.to_parquet("predictions_seen/2025_1_3_w_lstm_full_model.parquet", index=False)
+df_predict.to_parquet("predictions_seen/2025_4_6_w_lstm_full_model.parquet", index=False)
 
 print(df_predict[["trajectory_id", "date_time_utc", "mmsi",
                   "p_fishing", "pred_fishing"]].head())

@@ -46,7 +46,7 @@ def compute_metrics(df, prefix=""):
         f"{prefix}n_pred_no_fish_of_unknown": int(np.sum(~pred_fishing & rep_unknown)),
     }
 
-df_predict = pd.read_parquet("2025_1_3_w_2024_1_3_4_6_model_tuned.parquet")
+df_predict = pd.read_parquet("2025_1_3_w_full_2023_2024_model_tuned.parquet")
 
 # Overall metrics
 overall_metrics = compute_metrics(df_predict, prefix="ext_")
