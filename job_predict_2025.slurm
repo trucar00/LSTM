@@ -2,12 +2,12 @@
 #SBATCH --account=share-ie-idi
 #SBATCH --partition=GPUQ
 #SBATCH --gres=gpu:1
-#SBATCH --time=6:00:00
+#SBATCH --time=10:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=predictions_seen/output_BILSTM_%j.txt    # Log file
-#SBATCH --job-name=LSTM_fulle_predict
+#SBATCH --output=predictions_all_2025/output_pred_all_vessels_%j.txt    # Log file
+#SBATCH --job-name=LSTM_pred_all_2025_vessels
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 
@@ -37,4 +37,4 @@ EOF
 nvidia-smi
 
 # Run your script
-python -u predict_big_online.py
+python -u predict_big_online_all_2025.py
