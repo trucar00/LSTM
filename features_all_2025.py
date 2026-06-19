@@ -171,14 +171,14 @@ def check_speed(df):
 
 
 def concat2():
-    for i in range(1, 12+1, 3):
+    for i in range(1, 12+1, 2):
         dfs = []
-        for j in range(i, i+3):
+        for j in range(i, i+2):
             df = pd.read_parquet(f"../../Test/IDUN/Processed_AIS_2025/Cleaned_pq_new/{j:02d}.parquet", engine="pyarrow")
             dfs.append(df)
 
         all_vessels_three_months = pd.concat(dfs, ignore_index=True)
-        all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}_no_label.parquet", index=False)
+        all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+1}_no_label.parquet", index=False)
 
 def main(online):
     for year in range(2025, 2025+1):
@@ -191,6 +191,8 @@ def main(online):
             print(df.shape)
             df = df[KEEP_COLS]
             df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
+            del df
+            gc.collect()
 
 def russian(online):
     df = pd.read_parquet("Data/russian_svalbard_trawler_cleaned.parquet", engine="pyarrow")
