@@ -182,15 +182,15 @@ def concat2():
 
 def main(online):
     for year in range(2025, 2025+1):
-        for i in range(1, 12+1, 3):
-            df = pd.read_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_no_label.parquet", engine="pyarrow")
+        for i in range(1, 12+1, 2):
+            df = pd.read_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+1}_no_label.parquet", engine="pyarrow")
             print("Nr of unique trajs: ", df["trajectory_id"].nunique())
             print(df.shape)
             #df = column_fixing(df)
             df = add_features(df, online)
             print(df.shape)
             df = df[KEEP_COLS]
-            df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
+            df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+1}_feats.parquet", index=False)
             del df
             gc.collect()
 
@@ -201,7 +201,7 @@ def russian(online):
     print(df.shape)
 
 if __name__ == "__main__":
-    concat2()
+    #concat2()
     main(online=True)
     #russian(online=True)
     #concat()
