@@ -187,7 +187,6 @@ def main(online):
             print("Fixing columns")
             #df = column_fixing(df)
             df = add_features(df, online)
-            check_feats(df)
             df = df[KEEP_COLS]
             df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
 
