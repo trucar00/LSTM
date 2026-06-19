@@ -217,6 +217,16 @@ def main(online):
             df.to_parquet(f"three_months/feats_new_rule_online/{year}_{i}_{i+2}_feats.parquet", index=False)
             # CHANFE CHANFE ACCORDING TO WHAT TYPE
 
+def local(online):
+    df = pd.read_parquet(f"Data/russian_svalbard_trawler_cleaned.parquet", engine="pyarrow")
+    #rint("Fixing columns")
+    #df = column_fixing(df)
+    df = add_features(df, online=online)
+    check_feats(df)
+    print(df["report"].unique())
+    df.to_parquet(f"three_months/feats_new_rule_online/{year}_{i}_{i+2}_feats.parquet", index=False)
+    # CHANFE CHANFE ACCORDING TO WHAT TYPE
+
 if __name__ == "__main__":
     #concat()
     main(online=True)

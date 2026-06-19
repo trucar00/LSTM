@@ -35,6 +35,8 @@ def angle_wrap(a):
 FEATURES = ["cog_sin", "cog_cos", "speed_calc_ms", "accel", "ra_accel", "jerk", "ra_jerk", "dcog", "ra_dcog", "log_dist", "log_dt"]
 GEAR = ["Trål", "Not", "Krokredskap", "Snurrevad", "Garn", "Traps"]
 
+KEEP_COLS = ["mmsi", "trajectory_id", "date_time_utc", "lon", "lat"] + FEATURES
+
 
 def column_fixing(df):
     df["gear_report"] = df["label"]
@@ -54,59 +56,7 @@ def column_fixing(df):
     print(df["label"].unique())
     return df
 
-# Build features
-
-def close_to_shore(df, raster_path="../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/distance-from-shore.tif"):
-    print(f"Finding distance to shore.")
-    df = df.copy()
-    print("Rounding coordinates...")
-    df["lon_r"] = df["lon"].round(4)
-    df["lat_r"] = df["lat"].round(4)
-
-    print("Finding unique coordinates...")
-    unique_pts = df[["lon_r", "lat_r"]].drop_duplicates().copy()
-
-    with rasterio.open(raster_path) as src:
-        print("Reading raster...")
-        band = src.read(1)
-        transform = src.transform
-        nodata = src.nodata
-
-        print("Preparing coordinate arrays...")
-        lon = unique_pts["lon_r"].to_numpy()
-        lat = unique_pts["lat_r"].to_numpy()
-
-        print("Converting to raster indices...")
-        cols, rows = ~transform * (lon, lat)
-        rows = rows.astype(int)
-        cols = cols.astype(int)
-
-        print("Filtering valid indices...")
-        valid = (
-            (rows >= 0) & (rows < band.shape[0]) &
-            (cols >= 0) & (cols < band.shape[1])
-        )
-
-        print("Sampling raster (vectorized)...")
-        dist = np.full(len(unique_pts), np.nan, dtype="float32")
-
-        # tqdm here to track assignment progress (optional but visible)
-        dist[valid] = band[rows[valid], cols[valid]]
-
-        if nodata is not None:
-            dist[dist == nodata] = np.nan
-
-        unique_pts["dist_to_shore_km"] = dist
-
-    print("Merging back...")
-    df = df.merge(unique_pts, on=["lon_r", "lat_r"], how="left")
-
-    print("Cleaning up...")
-    df = df.drop(columns=["lon_r", "lat_r"])
-
-    return df
-
-def add_features(df):
+def add_features(df, online):
     df = df.copy()
     df["date_time_utc"] = pd.to_datetime(df["date_time_utc"])
     df = df.sort_values(["trajectory_id", "date_time_utc"]).copy()
@@ -138,15 +88,6 @@ def add_features(df):
     df["cog_sin"] = np.sin(np.radians(df["cog"]))
     df["cog_cos"] = np.cos(np.radians(df["cog"]))
 
-    # Binary label
-    #df["y"] = np.nan
-    #df.loc[df["label"] == "fishing", "y"] = 1
-    #df.loc[df["label"] == "conf_no_fishing", "y"] = 0
-    
-    # Sample weight, unknown = 0
-    #df["sample_weight"] = df["y"].notna().astype(np.float32)
-    #df["y_train"] = df["y"].fillna(0).astype(np.float32) # replacing NaN with 0, now the unknowns have y_train = 0 and sample weight = 0
-
     # Calculated speed in m/s
     df["speed_calc_ms"] = df["dist_to_prev"] / df["dt"]
 
@@ -162,7 +103,7 @@ def add_features(df):
     df["dcog"] = angle_wrap(df["cog"] - df["prev_cog"]) / df["dt"]
 
     # Remove invalid rows
-    feature_cols = ["dt", "dist_to_prev", "speed_calc_ms", "accel", "jerk", "dcog", "dist_to_shore_km"]
+    feature_cols = ["dt", "dist_to_prev", "speed_calc_ms", "accel", "jerk", "dcog"]
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(subset=feature_cols).copy()
 
@@ -175,11 +116,19 @@ def add_features(df):
     # Smooth noisy derivative features
     SMOOTH_COLS = ["accel", "jerk", "dcog"]
     WINDOW = 5
-    for col in SMOOTH_COLS:
-        df[f"ra_{col}"] = (
-            df.groupby("trajectory_id")[col]
-              .transform(lambda x: x.rolling(window=WINDOW, center=True, min_periods=1).mean())
-        )
+    if online:
+        for col in SMOOTH_COLS:
+            df[f"ra_{col}"] = (
+                df.groupby("trajectory_id")[col]
+                .transform(lambda x: x.rolling(window=WINDOW, center=False, min_periods=1).mean())
+            )
+    else:
+
+        for col in SMOOTH_COLS:
+            df[f"ra_{col}"] = (
+                df.groupby("trajectory_id")[col]
+                .transform(lambda x: x.rolling(window=WINDOW, center=True, min_periods=1).mean())
+            )
 
     return df
 
@@ -192,7 +141,6 @@ def check_feats(df):
 
     print(df[FEATURES].isna().sum())
     print(np.isinf(df[FEATURES]).sum())
-    #print(df["y"].value_counts(dropna=False))
 
     print(df[FEATURES].describe().T[["mean", "std", "min", "max"]])
     print(df[FEATURES].abs().max().sort_values(ascending=False))
@@ -226,31 +174,32 @@ def concat2():
     for i in range(1, 12+1, 3):
         dfs = []
         for j in range(i, i+3):
-            df = pd.read_parquet(f"../../Label-ais-ers/Master-prework/label_ais_pts_w_ers/all_vessels_2025_w_labels/ais_ers_labels_all_{j:02d}_2025.parquet", engine="pyarrow")
+            df = pd.read_parquet(f"../../Test/IDUN/Processed_AIS_2025/Cleaned_pq_new/{i:02d}.parquet", engine="pyarrow")
             dfs.append(df)
 
         all_vessels_three_months = pd.concat(dfs, ignore_index=True)
-        all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}.parquet", index=False)
+        all_vessels_three_months.to_parquet(f"three_months/all_vessels_2025/all_vessels_2025_{i}_{i+2}_no_label.parquet", index=False)
 
-def main():
+def main(online):
     for year in range(2025, 2025+1):
         for i in range(1, 12+1, 3):
             df = pd.read_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}.parquet", engine="pyarrow")
             print("Fixing columns")
-            df = column_fixing(df)
-            df = close_to_shore(df)
-            df = add_features(df)
+            #df = column_fixing(df)
+            df = add_features(df, online)
             check_feats(df)
+            df = df.drop(columns=[])
             df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
 
-def russian():
+def russian(online):
     df = pd.read_parquet("Data/russian_svalbard_trawler_cleaned.parquet", engine="pyarrow")
-    df = close_to_shore(df, raster_path="distance-from-shore.tif")
-    df = add_features(df)
-    df.to_parquet("russian_svalbard_trawler_feats.parquet", index=False)
+    df = add_features(df, online)
+    df.to_parquet("russian_svalbard_trawler_feats_online.parquet", index=False)
+    print(df.shape)
 
 if __name__ == "__main__":
-    #main()
-    russian()
+    concat2()
+    #main(online=True)
+    #russian(online=True)
     #concat()
     #concat2()
