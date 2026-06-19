@@ -183,12 +183,12 @@ def concat2():
 def main(online):
     for year in range(2025, 2025+1):
         for i in range(1, 12+1, 3):
-            df = pd.read_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}.parquet", engine="pyarrow")
+            df = pd.read_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_no_label.parquet", engine="pyarrow")
             print("Fixing columns")
             #df = column_fixing(df)
             df = add_features(df, online)
             check_feats(df)
-            df = df.drop(columns=[])
+            df = df[KEEP_COLS]
             df.to_parquet(f"three_months/all_vessels_2025/all_vessels_{year}_{i}_{i+2}_feats.parquet", index=False)
 
 def russian(online):
@@ -198,8 +198,8 @@ def russian(online):
     print(df.shape)
 
 if __name__ == "__main__":
-    concat2()
-    #main(online=True)
+    #concat2()
+    main(online=True)
     #russian(online=True)
     #concat()
     #concat2()
