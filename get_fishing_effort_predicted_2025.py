@@ -11,9 +11,9 @@ from pathlib import Path
 # Settings
 # ------------------------------------------------------------
 files = [
-    "predictions_all_2025/2025_all_vessels_month_pair-1.parquet",
-    "predictions_all_2025/2025_all_vessels_month_pair-2.parquet",
-    "predictions_all_2025/2025_all_vessels_month_pair-3.parquet",
+    "predictions_all_2025/2025_all_vessels_monthpair-1.parquet",
+    "predictions_all_2025/2025_all_vessels_monthpair-2.parquet",
+    "predictions_all_2025/2025_all_vessels_monthpair-3.parquet",
     #"heatmap_of_activity/2025_all_vessels_month_pair-4.parquet",
     #"heatmap_of_activity/2025_all_vessels_month_pair-5.parquet",
     #"heatmap_of_activity/2025_all_vessels_month_pair-6.parquet",
@@ -39,6 +39,13 @@ MAX_GAP_HOURS = 6
 # between two consecutive AIS messages.
 # If False, assign the time interval to the grid cell of the first message.
 SAME_CELL_ONLY = False
+
+
+""" def only_foreign_vessels(df, mmsi_code_path):
+
+
+
+    return df_only_foreign """
 
 
 # ------------------------------------------------------------
