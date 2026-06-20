@@ -16,7 +16,7 @@ files = [
     "predictions_all_2025/2025_all_vessels_monthpair-3.parquet",
     "predictions_all_2025/2025_all_vessels_monthpair-4.parquet",
     "predictions_all_2025/2025_all_vessels_monthpair-5.parquet",
-    #"predictions_all_2025/2025_all_vessels_monthpair-6.parquet",
+    "predictions_all_2025/2025_all_vessels_monthpair-6.parquet",
 
 ]
 
@@ -169,7 +169,7 @@ print(effort.sort_values("fishing_hours", ascending=False).head())
 # ------------------------------------------------------------
 # Optional: save aggregated effort
 # ------------------------------------------------------------
-output_path = Path("predictions_all_2025/fishing_effort_grid_hours_pred_2025.parquet")
+output_path = Path("predictions_all_2025/fishing_effort_grid_hours_pred_all_2025.parquet")
 effort.to_parquet(output_path, index=False)
 
 print(f"Saved grid effort to: {output_path}")
