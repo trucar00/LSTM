@@ -14,9 +14,9 @@ files = [
     "predictions_all_2025/2025_all_vessels_monthpair-1.parquet",
     "predictions_all_2025/2025_all_vessels_monthpair-2.parquet",
     "predictions_all_2025/2025_all_vessels_monthpair-3.parquet",
-    "heatmap_of_activity/2025_all_vessels_monthpair-4.parquet",
-    "heatmap_of_activity/2025_all_vessels_monthpair-5.parquet",
-    #"heatmap_of_activity/2025_all_vessels_monthpair-6.parquet",
+    "predictions_all_2025/2025_all_vessels_monthpair-4.parquet",
+    "predictions_all_2025/2025_all_vessels_monthpair-5.parquet",
+    #"predictions_all_2025/2025_all_vessels_monthpair-6.parquet",
 
 ]
 
