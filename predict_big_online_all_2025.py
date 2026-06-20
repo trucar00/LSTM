@@ -93,15 +93,11 @@ print("Read mu and sigma from file")
 
 FOLDER_BASE = "three_months/all_vessels_2025"
 ALL_VESSELS_2025_FILES = [
-    f"{FOLDER_BASE}/all_vessels_2025_1_2_feats.parquet",
-    f"{FOLDER_BASE}/all_vessels_2025_3_4_feats.parquet",
-    f"{FOLDER_BASE}/all_vessels_2025_5_6_feats.parquet",
-    f"{FOLDER_BASE}/all_vessels_2025_7_8_feats.parquet",
     f"{FOLDER_BASE}/all_vessels_2025_9_10_feats.parquet",
     f"{FOLDER_BASE}/all_vessels_2025_11_12_feats.parquet",
 ]
 
-save_id = 1
+save_id = 5
 for f in ALL_VESSELS_2025_FILES:
     print("Loading and predicting file ", f)
     df_predict = pd.read_parquet(f, engine="pyarrow")
