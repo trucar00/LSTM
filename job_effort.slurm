@@ -5,7 +5,7 @@
 #SBATCH --time=2:00:00
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
-#SBATCH --mem=128G             # GB memory
+#SBATCH --mem=256G             # GB memory
 #SBATCH --output=predictions_all_2025/output_effort_test_%j.txt    # Log file
 #SBATCH --job-name=effort_2025
 #SBATCH --mail-user=trulsc00@gmail.com
