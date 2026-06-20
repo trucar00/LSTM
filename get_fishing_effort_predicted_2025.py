@@ -14,8 +14,8 @@ files = [
     "predictions_all_2025/2025_all_vessels_monthpair-1.parquet",
     "predictions_all_2025/2025_all_vessels_monthpair-2.parquet",
     "predictions_all_2025/2025_all_vessels_monthpair-3.parquet",
-    #"heatmap_of_activity/2025_all_vessels_month_pair-4.parquet",
-    #"heatmap_of_activity/2025_all_vessels_month_pair-5.parquet",
+    "heatmap_of_activity/2025_all_vessels_month_pair-4.parquet",
+    "heatmap_of_activity/2025_all_vessels_month_pair-5.parquet",
     #"heatmap_of_activity/2025_all_vessels_month_pair-6.parquet",
 
 ]
@@ -41,13 +41,34 @@ MAX_GAP_HOURS = 6
 SAME_CELL_ONLY = False
 
 
-""" def only_foreign_vessels(df, mmsi_code_path):
+def only_foreign_vessels(df):
+    print("Unique mmsis before dropping norwegian vessels ", df["mmsi"].nunique())
+    df["mmsi"] = df["mmsi"].astype(str)
+    df["mmsi"] = df["mmsi"].str.strip()
+
+    df["landcode"] = df["mmsi"].str.slice(stop=3)
+    df["landcode"] = pd.to_numeric(df["mmsi"].str.slice(stop=3), errors="coerce")
+
+    df_only_foreign = df[~df["landcode"].isin([257, 258, 259])].reset_index(drop=True) # drop all norwegian vessels
+    print("Unique mmsis after dropping norwegian vessels ", df_only_foreign["mmsi"].nunique())
+
+    return df_only_foreign
+
+def only_russian_vessels(df):
+    print("Unique mmsis before extracting russian vessels ", df["mmsi"].nunique())
+    df["mmsi"] = df["mmsi"].astype(str)
+    df["mmsi"] = df["mmsi"].str.strip()
+
+    df["landcode"] = df["mmsi"].str.slice(stop=3)
+    df["landcode"] = pd.to_numeric(df["mmsi"].str.slice(stop=3), errors="coerce")
+
+    df_only_russian = df[df["landcode"] == 273].reset_index(drop=True) # drop all norwegian vessels
+    print("Unique mmsis before extracting russian vessels ", df_only_russian["mmsi"].nunique())
+    
+    return df_only_russian
 
 
-
-    return df_only_foreign """
-
-
+FOREIGN = False
 # ------------------------------------------------------------
 # Read fishing predictions
 # ------------------------------------------------------------
@@ -59,8 +80,11 @@ for f in files:
         columns=["mmsi", "date_time_utc", "lon", "lat", "pred_fishing"],
         filters=[("pred_fishing", "==", 1)]
     )
-
     df_part = table.to_pandas()
+
+    if FOREIGN:
+        df_part = only_foreign_vessels(df_part)
+    
     dfs.append(df_part)
 
 df = pd.concat(dfs, ignore_index=True)
@@ -70,9 +94,9 @@ df["date_time_utc"] = pd.to_datetime(df["date_time_utc"], utc=True)
 # Keep only valid positions inside region
 df = df[
     (df["lat"] >= REGION_LAT_SOUTH) &
-    (df["lat"] <= REGION_LAT_NORTH) &
+    (df["lat"] < REGION_LAT_NORTH) &
     (df["lon"] >= REGION_LON_WEST) &
-    (df["lon"] <= REGION_LON_EAST)
+    (df["lon"] < REGION_LON_EAST)
 ].copy()
 
 df = df.dropna(subset=["mmsi", "date_time_utc", "lon", "lat"])
