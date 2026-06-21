@@ -492,7 +492,7 @@ def predict_and_score_external(model, seen, seed):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = f"{FOLDER}/BiLSTM_seeded_results_full.csv"
+results_csv_path = f"{FOLDER}/BiLSTM_seeded_results_full_test_seen.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
