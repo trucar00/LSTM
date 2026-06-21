@@ -6,8 +6,8 @@
 #SBATCH --nodes=1             # 1 compute nodes
 #SBATCH --cpus-per-task=8     # 2 CPU cores
 #SBATCH --mem=128G             # GB memory
-#SBATCH --output=training_FINAL/output_LSTM_%j.txt    # Log file
-#SBATCH --job-name=LSTM_train_2023_test_seen_unseen_w_tuned
+#SBATCH --output=training_FINAL/output_LSTM_full_seen_test_%j.txt    # Log file
+#SBATCH --job-name=LSTM_all_seen_test
 #SBATCH --mail-user=trulsc00@gmail.com
 #SBATCH --mail-type=ALL
 

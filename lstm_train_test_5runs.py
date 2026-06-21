@@ -62,11 +62,11 @@ SEASON_FEATURES = ["month_sin", "month_cos"]
 
 FEATURES = BASE_FEATURES + SEASON_FEATURES
 
-SEEDS = [0, 1, 2, 3, 4] 
+SEEDS = [0] 
 MAX_EPOCHS = 15
 PATIENCE = 3
 
-FOLDER = "training_FINAL_FAST"
+FOLDER = "training_FINAL"
 TAG = "lstm_train_2023_val_test_2024"
 
 def all_mmsis_in(files):
@@ -359,7 +359,7 @@ df_test = prepare_test_df(df_test)
 
 # TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
 random.seed(42)
-train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 4) # 25% of train mmsis used as seen
+train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) ) # 100% of train mmsis used as seen
 print(f"Nr of train mmsis to use for seen test: ", len(train_mmsi_list))
 df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
 df_test_seen = prepare_test_df(df_test_seen)
@@ -422,7 +422,7 @@ def predict_and_score_testernal(model, seen, seed):
 
     if seed==0:
         if seen:
-            df.to_parquet(f"{FOLDER}/test_vessels_2024/LSTM_2024_seen_test_seed{seed}.parquet", index=False)
+            df.to_parquet(f"{FOLDER}/test_vessels_2024/LSTM_2024_seen_test_seed{seed}_full.parquet", index=False)
         else:
             df.to_parquet(f"{FOLDER}/test_vessels_2024/LSTM_2024_UNseen_test_seed{seed}.parquet", index=False)
 
@@ -501,7 +501,7 @@ def predict_and_score_testernal(model, seen, seed):
 # Multi-seed loop
 # ============================================================
 
-results_csv_path = f"{FOLDER}/LSTM_seeded_results_full_NEW.csv"
+results_csv_path = f"{FOLDER}/LSTM_seeded_results_full_NEW_all_seen_test.csv"
 
 # Resume support: skip seeds already in the CSV
 done_seeds = set()
@@ -575,15 +575,15 @@ for seed in SEEDS:
     torch.cuda.empty_cache()
     
     # Test on unseen future vessels in 2024
-    test_unseen = predict_and_score_testernal(model, seen=False, seed=seed)
+    # test_unseen = predict_and_score_testernal(model, seen=False, seed=seed)
 
-    print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
-          f"precision {test_unseen['unseen_precision']:.4f} "
-          f"recall {test_unseen['unseen_recall']:.4f} "
-          f"specificity {test_unseen['unseen_specificity']:.4f} "
-          f"f1 {test_unseen['unseen_f1']:.4f} "
-          f"accuracy {test_unseen['unseen_accuracy']:.4f} "
-          f"loss {test_unseen['unseen_loss']:.4f} ")
+    # print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
+    #       f"precision {test_unseen['unseen_precision']:.4f} "
+    #       f"recall {test_unseen['unseen_recall']:.4f} "
+    #       f"specificity {test_unseen['unseen_specificity']:.4f} "
+    #       f"f1 {test_unseen['unseen_f1']:.4f} "
+    #       f"accuracy {test_unseen['unseen_accuracy']:.4f} "
+    #       f"loss {test_unseen['unseen_loss']:.4f} ")
     
     # Test on seen (Norwegian fishing fleet) in 2024
     test_seen = predict_and_score_testernal(model, seen=True, seed=seed)
@@ -600,13 +600,13 @@ for seed in SEEDS:
         "seed": seed,
         "best_val_loss": best_val,
         "epochs_trained": len(history),
-        **test_unseen,
+        #**test_unseen,
         **test_seen,
     }
     all_results.append(row)
 
     # Save incrementally so a crash doesn't lose everything
-    pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
+    #pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
     torch.cuda.synchronize()
     del model, optimizer, scheduler
     gc.collect()
@@ -629,6 +629,6 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary_full_NEW.csv")
+#summary.to_csv(f"{FOLDER}/LSTM_seed_results_summary_full_NEW.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
 print(f"Summary:       {FOLDER}/LSTM_seed_results_summary_full_NEW.csv")
