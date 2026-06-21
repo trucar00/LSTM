@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 USE_TUNED_PARAMS = True
-tuned_params_path = Path("best_params_LSTM_tune-2023-no-val-test.json")
+tuned_params_path = Path("params/best_params_BILSTM_tune-2023-no-val-test.json")
 
 if USE_TUNED_PARAMS and tuned_params_path.exists():
     with open(tuned_params_path, "r") as file:
@@ -112,8 +112,8 @@ def print_parameter_count(model, model_name):
 
 n_features = len(FEATURES)
 
-lstm_model = FishingLSTM(n_features=n_features)
-#bilstm_model = FishingBiLSTM(n_features=n_features)
+#lstm_model = FishingLSTM(n_features=n_features)
+bilstm_model = FishingBiLSTM(n_features=n_features)
 
-print_parameter_count(lstm_model, "LSTM")
-#print_parameter_count(bilstm_model, "BiLSTM")
+#print_parameter_count(lstm_model, "LSTM")
+print_parameter_count(bilstm_model, "BiLSTM")

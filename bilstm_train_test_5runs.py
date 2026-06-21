@@ -352,7 +352,7 @@ df_test = prepare_test_df(df_test)
 
 # TEST ON FUTURE BUT SEEN VESSELS in training -> train on norwegian vessels, predict future norwegian vessels
 random.seed(42)
-train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis) // 4)
+train_mmsi_list = random.sample(sorted(train_mmsis), k=len(train_mmsis)) # full length
 print(f"Nr of train mmsis to use for seen test: ", len(train_mmsi_list))
 df_test_seen = get_test_df(VAL_TEST_FILES, train_mmsi_list)
 df_test_seen = prepare_test_df(df_test_seen)
@@ -562,7 +562,7 @@ for seed in SEEDS:
     model.load_state_dict(torch.load(model_name, map_location=device))
     
     # testernal 2025_1_3 test — the metric that matters
-    test_unseen = predict_and_score_external(model, seen=False, seed=seed)
+    """ test_unseen = predict_and_score_external(model, seen=False, seed=seed)
 
     print(f"[seed {seed}] TEST on UNSEEN vessels in 2024 | "
           f"precision {test_unseen['unseen_precision']:.3f} "
@@ -570,7 +570,7 @@ for seed in SEEDS:
           f"specificity {test_unseen['unseen_specificity']:.3f} "
           f"f1 {test_unseen['unseen_f1']:.3f} "
           f"accuracy {test_unseen['unseen_accuracy']:.3f} "
-          f"loss {test_unseen['unseen_loss']:.4f} ")
+          f"loss {test_unseen['unseen_loss']:.4f} ") """
     
     test_seen = predict_and_score_external(model, seen=True, seed=seed)
 
@@ -586,13 +586,13 @@ for seed in SEEDS:
         "seed": seed,
         "best_val_loss": best_val,
         "epochs_trained": len(history),
-        **test_unseen,
+        #**test_unseen,
         **test_seen,
     }
     all_results.append(row)
 
     # Save incrementally so a crash doesn't lose everything
-    pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
+    #pd.DataFrame(all_results).to_csv(results_csv_path, index=False)
     torch.cuda.synchronize()
     del model, optimizer, scheduler
     gc.collect()
@@ -616,7 +616,7 @@ summary = df_res[metric_cols].agg(["mean", "std"]).T
 summary.columns = ["mean", "std"]
 print("\nMean / Std across seeds:")
 print(summary)
-summary.to_csv(f"{FOLDER}/BiLSTM_seed_results_summary_full.csv")
+#summary.to_csv(f"{FOLDER}/BiLSTM_seed_results_summary_full.csv")
 print(f"\nPer-seed rows: {results_csv_path}")
 print(f"Summary:       {FOLDER}/BiLSTM_seed_results_summary_full.csv")
 
