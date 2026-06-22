@@ -7,7 +7,7 @@ from collections import defaultdict
 # ============================================================
 
 files = [
-    "training_FINAL/test_vessels_2024/BiLSTM_2024_seen_test_seed0.parquet",
+    "training_FINAL/test_vessels_2024/LSTM_2024_seen_test_seed0_full.parquet",
 ]
 
 columns = [
@@ -251,4 +251,4 @@ results[metric_cols] = results[metric_cols] * 100
 print("\nFinal 2024 results:")
 print(results)
 
-results.to_csv("training_FINAL/test_vessels_2024/bilstm_2024_gear_specific_statistics_seen_vessels.csv", index=False)
+results.to_csv("training_FINAL/test_vessels_2024/LSTM_2024_gear_specific_statistics_seen_vessels.csv", index=False)
